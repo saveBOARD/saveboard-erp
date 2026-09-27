@@ -33,6 +33,7 @@ const AVAILABILITY_CLASS: Record<Availability, string> = {
   in_stock: "bg-ok text-white",
   not_available: "bg-bad text-white",
   not_tracked: "text-muted",
+  shipped: "bg-[#2f6fb0] text-white",
 };
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -56,6 +57,7 @@ export function OrderView({
   availability,
   backHref,
   actions,
+  shipped,
 }: {
   kind: "quote" | "order";
   order: Order;
@@ -65,6 +67,8 @@ export function OrderView({
   availability?: Map<string, Availability>;
   backHref: string;
   actions?: React.ReactNode;
+  /** Quantity shipped per line (sales orders). */
+  shipped?: Map<string, number>;
 }) {
   const status = ORDER_STATUS[kind === "quote" ? (o.quoteStatus ?? "draft") : o.status];
   const shipTo = address([o.shipToName, o.shipToLine1, o.shipToLine2, [o.shipToCity, o.shipToRegion, o.shipToPostcode].filter(Boolean).join(" "), o.shipToCountry]);
@@ -123,6 +127,7 @@ export function OrderView({
               <th className="border-b border-line px-3 py-2 font-normal">#</th>
               <th className="border-b border-line px-3 py-2 font-normal">Item</th>
               <th className="border-b border-line px-3 py-2 text-right font-normal">Quantity</th>
+              {shipped && <th className="border-b border-line px-3 py-2 text-right font-normal">Shipped</th>}
               <th className="border-b border-line px-3 py-2 text-right font-normal">Price per unit</th>
               <th className="border-b border-line px-3 py-2 text-right font-normal">Discount</th>
               <th className="border-b border-line px-3 py-2 text-right font-normal">Total ex GST</th>
@@ -143,6 +148,16 @@ export function OrderView({
                   <td className="border-b border-line px-3 py-2 text-right tabular-nums whitespace-nowrap">
                     {qtyFmt(l.qty)} {uom}
                   </td>
+                  {shipped && (
+                    <td
+                      className={clsx(
+                        "border-b border-line px-3 py-2 text-right tabular-nums whitespace-nowrap",
+                        (shipped.get(l.id) ?? 0) >= Number(l.qty) - 1e-9 ? "text-ok" : (shipped.get(l.id) ?? 0) > 0 ? "text-warn" : "text-muted",
+                      )}
+                    >
+                      {qtyFmt(shipped.get(l.id) ?? 0)}
+                    </td>
+                  )}
                   <td className="border-b border-line px-3 py-2 text-right tabular-nums whitespace-nowrap">{money(l.unitPrice, o.currency)}</td>
                   <td className="border-b border-line px-3 py-2 text-right tabular-nums">{pct(l.discountPct)}</td>
                   <td className="border-b border-line px-3 py-2 text-right tabular-nums whitespace-nowrap">{money(l.lineSubtotal, o.currency)}</td>
@@ -162,12 +177,12 @@ export function OrderView({
               ["GST", o.tax],
             ].map(([label, v]) => (
               <tr key={label}>
-                <td colSpan={5} className="px-3 pt-2 text-right text-muted">{label}</td>
+                <td colSpan={shipped ? 6 : 5} className="px-3 pt-2 text-right text-muted">{label}</td>
                 <td className="px-3 pt-2 text-right tabular-nums whitespace-nowrap">{money(v, o.currency)}</td>
               </tr>
             ))}
             <tr className="font-bold">
-              <td colSpan={5} className="px-3 pt-1 pb-3 text-right">Total</td>
+              <td colSpan={shipped ? 6 : 5} className="px-3 pt-1 pb-3 text-right">Total</td>
               <td className="px-3 pt-1 pb-3 text-right tabular-nums whitespace-nowrap">{money(o.total, o.currency)}</td>
             </tr>
           </tfoot>

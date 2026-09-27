@@ -8,6 +8,7 @@
  *   npm run db:import:prod                # into Supabase (reads .env.production.local)
  */
 import "./env";
+import { fixMojibake } from "./text-fix";
 import ExcelJS from "exceljs";
 import { and, eq, sql } from "drizzle-orm";
 import { createDb, type Db } from "../src/db/client";
@@ -46,7 +47,7 @@ const str = (v: Cell) => {
   const x = val(v);
   if (x === null) return null;
   const s = (x instanceof Date ? x.toISOString().slice(0, 10) : String(x)).trim();
-  return s === "" ? null : s;
+  return s === "" ? null : fixMojibake(s);
 };
 const num = (v: Cell) => {
   const x = val(v);

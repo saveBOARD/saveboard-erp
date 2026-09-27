@@ -20,7 +20,12 @@ server actions); the browser never queries tables directly.
   user `postgres.<ref>`), not the IPv6-only direct host `db.<ref>.supabase.co`.
 - Local dev needs no accounts: without `DATABASE_URL` the app uses PGlite (embedded Postgres) in `.data/pglite`.
   PGlite is single-process: **stop `npm run dev` before running any local `db:*` script**, or the running app
-  won't see (and may overwrite) the changes.
+  won't see (and may overwrite) the changes. If PGlite fails with "Aborted()" (it doesn't survive the dev server
+  being killed mid-write), rebuild it: `npm run db:rebuild-local` (≈1 min, recreates everything from the Katana files).
+- Katana exports double-encode some characters (Whangārei → "WhangÄrei"); every importer runs `fixMojibake`.
+- Sales order stock flow: shipments (`shipments`, `shipment_lines`) are the only way stock leaves for a sale; an order
+  becomes `shipped` when every line is fully shipped. Committed stock = ordered − shipped on open/picked orders.
+  Reversing a shipment adds opposite movements (never deletes).
 - Lists use the shared `src/components/data-table.tsx` (filters, sort, totals, Excel export, column picker).
 
 ## Commands

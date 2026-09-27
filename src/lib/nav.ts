@@ -41,6 +41,7 @@ export const SECTIONS: Section[] = [
       { label: "Inventory", href: "/stock/inventory" },
       { label: "Stock adjustments", href: "/stock/adjustments", phase: "3" },
       { label: "Stocktakes", href: "/stock/stocktakes", phase: "3" },
+      { label: "Batch trace", href: "/stock/batches" },
     ],
   },
   {

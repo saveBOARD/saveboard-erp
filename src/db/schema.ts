@@ -279,6 +279,48 @@ export const orderLines = pgTable(
   (t) => [index("order_lines_order").on(t.orderId), index("order_lines_product").on(t.productId)],
 );
 
+/**
+ * A shipment sends some or all of an order's outstanding quantities. An order can have several (partial
+ * shipments). A reversed shipment stays on record; its stock is put back by reversing movements.
+ */
+export const shipments = pgTable(
+  "shipments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    entityId: text("entity_id").notNull().references(() => entities.id),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => salesOrders.id),
+    seq: integer("seq").notNull(), // SO-1586/1, SO-1586/2 …
+    shippedOn: date("shipped_on").notNull(),
+    carrier: text("carrier"),
+    consignmentNo: text("consignment_no"),
+    notes: text("notes"),
+    createdBy: uuid("created_by").references(() => users.id),
+    reversedAt: timestamp("reversed_at", { withTimezone: true }),
+    reversedBy: uuid("reversed_by").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("shipments_order_seq").on(t.orderId, t.seq)],
+);
+
+export const shipmentLines = pgTable(
+  "shipment_lines",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    shipmentId: uuid("shipment_id")
+      .notNull()
+      .references(() => shipments.id, { onDelete: "cascade" }),
+    orderLineId: uuid("order_line_id")
+      .notNull()
+      .references(() => orderLines.id), // no cascade: a shipped line can't be deleted
+    productId: uuid("product_id").references(() => products.id),
+    qty: qty("qty").notNull(),
+    batchNo: text("batch_no"),
+  },
+  (t) => [index("shipment_lines_shipment").on(t.shipmentId), index("shipment_lines_order_line").on(t.orderLineId), index("shipment_lines_batch").on(t.batchNo)],
+);
+
 export const auditLog = pgTable(
   "audit_log",
   {

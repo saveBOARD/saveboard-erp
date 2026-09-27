@@ -94,15 +94,9 @@ export function OrderActions({ id, kind, status, quoteStatus }: Props) {
             {(status === "open" || status === "picked") && (
               <>
                 <Btn disabled={pending} onClick={() => run(() => setOrderStatus(id, "cancelled"), "Cancel this sales order? Its stock is released.")}>Cancel order</Btn>
-                <Btn
-                  disabled={pending}
-                  primary
-                  onClick={() =>
-                    run(() => setOrderStatus(id, "shipped"), "Mark as shipped? This takes the items out of stock and can't be undone from this screen.")
-                  }
-                >
+                <Link href={`/sell/orders/${id}/ship`} className="btn-primary">
                   <Truck className="h-4 w-4" /> Ship
-                </Btn>
+                </Link>
               </>
             )}
             {status === "shipped" && (

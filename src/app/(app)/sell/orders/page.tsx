@@ -5,6 +5,7 @@ import { ListHeader } from "@/components/list-header";
 import { ORDER_STATUS } from "@/components/order-view";
 import { db, t } from "@/db";
 import { getEntityContext } from "@/lib/dal";
+import { DELIVERY_LABEL, deliveryState, shippedByLine } from "@/lib/orders/shipped";
 import { AVAILABILITY_LABEL, stockPosition } from "@/lib/queries/availability";
 
 export const metadata: Metadata = { title: "Sales orders · saveBOARD ERP" };
@@ -42,6 +43,19 @@ export default async function SalesOrdersPage(props: PageProps<"/sell/orders">) 
       .orderBy(desc(o.orderDate), desc(o.number)),
     stockPosition(entity.id),
   ]);
+  const orderIds = rows.map((r) => r.id);
+  const [lineRows, shipped] = orderIds.length
+    ? await Promise.all([
+        db.select({ id: t.orderLines.id, orderId: t.orderLines.orderId, qty: t.orderLines.qty }).from(t.orderLines).where(inArray(t.orderLines.orderId, orderIds)),
+        shippedByLine(orderIds),
+      ])
+    : [[], new Map<string, number>()];
+  const delivery = new Map(
+    orderIds.map((oid) => [
+      oid,
+      DELIVERY_LABEL[deliveryState(lineRows.filter((l) => l.orderId === oid).map((l) => ({ id: l.id, qty: Number(l.qty) })), shipped)],
+    ]),
+  );
 
   const columns: Column[] = [
     { key: "orderDate", label: "Created date", width: 110 },
@@ -53,6 +67,7 @@ export default async function SalesOrdersPage(props: PageProps<"/sell/orders">) 
       ? [{ key: "salesItems", label: "Sales items", tones: { "In stock": "ok", "Not available": "bad" } } as Column]
       : []),
     { key: "status", label: "Status", tones: { Open: "pending", Picked: "pending", Shipped: "ok", Invoiced: "ok", Closed: "ok", Cancelled: "bad" } },
+    { key: "delivery", label: "Delivery", tones: { "Not shipped": "pending", "Partially shipped": "pending", Shipped: "ok" } },
     { key: "customerReference", label: "Customer reference #" },
     { key: "overdueLabel", label: "Overdue", hidden: true },
   ];
@@ -75,6 +90,7 @@ export default async function SalesOrdersPage(props: PageProps<"/sell/orders">) 
           deliveryDeadline: r.deliveryDeadline,
           salesItems: AVAILABILITY_LABEL[position.orderAvailability.get(r.id) ?? "not_tracked"],
           status: ORDER_STATUS[r.status].label,
+          delivery: delivery.get(r.id) ?? null,
           customerReference: r.customerReference,
           overdueLabel: r.overdue && tab.value === "open" ? "Overdue" : null,
         }))}

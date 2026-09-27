@@ -2,8 +2,9 @@ import "server-only";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { cache } from "react";
 import { db, t } from "@/db";
+import { shippedByLine } from "@/lib/orders/shipped";
 
-export type Availability = "in_stock" | "not_available" | "not_tracked";
+export type Availability = "in_stock" | "not_available" | "not_tracked" | "shipped";
 
 /**
  * Stock position for an entity, Katana style:
@@ -41,6 +42,7 @@ export const stockPosition = cache(async (entityId: string) => {
       asc(t.orderLines.lineNo),
     );
 
+  const shipped = await shippedByLine([...new Set(lines.map((l) => l.orderId))]);
   const remaining = new Map(onHand);
   const committed = new Map<string, number>();
   const lineAvailability = new Map<string, Availability>();
@@ -48,8 +50,12 @@ export const stockPosition = cache(async (entityId: string) => {
 
   for (const l of lines) {
     let a: Availability = "not_tracked";
+    const q = Number(l.qty) - (shipped.get(l.lineId) ?? 0); // only what's still to ship is committed
+    if (q <= 1e-9) {
+      lineAvailability.set(l.lineId, "shipped");
+      continue;
+    }
     if (l.productId && l.trackStock) {
-      const q = Number(l.qty);
       committed.set(l.productId, (committed.get(l.productId) ?? 0) + q);
       const left = remaining.get(l.productId) ?? 0;
       a = q <= left + 1e-9 ? "in_stock" : "not_available";
@@ -69,4 +75,5 @@ export const AVAILABILITY_LABEL: Record<Availability, string> = {
   in_stock: "In stock",
   not_available: "Not available",
   not_tracked: "—",
+  shipped: "Shipped",
 };

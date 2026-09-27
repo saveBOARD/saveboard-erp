@@ -44,7 +44,22 @@ function SignOff({ fields }: { fields: string[] }) {
 }
 
 /** One A4 document. Packing slips never show prices, cost or margin (business rule). */
-export function SalesDocument({ kind, entity, order: o, customer, lines }: { kind: DocKind; entity: Entity; order: Order; customer: Customer; lines: Line[] }) {
+export function SalesDocument({
+  kind,
+  entity,
+  order: o,
+  customer,
+  lines,
+  shipment,
+}: {
+  kind: DocKind;
+  entity: Entity;
+  order: Order;
+  customer: Customer;
+  lines: Line[];
+  /** Printing one shipment of a partly shipped order. */
+  shipment?: { ref: string; shippedOn: string; carrier: string | null; consignmentNo: string | null };
+}) {
   const priced = kind === "quote" || kind === "acknowledgement";
   const cityLine = (city: string | null, region: string | null, postcode: string | null) => [city, region, postcode].filter(Boolean).join(" ");
   const foreign = o.currency !== entity.currency;
@@ -67,11 +82,29 @@ export function SalesDocument({ kind, entity, order: o, customer, lines }: { kin
         </div>
         <div className="text-right">
           <div className="text-[18px] font-bold uppercase">{TITLES[kind]}</div>
-          <div className="text-[16px] font-medium">{o.number}</div>
+          <div className="text-[16px] font-medium">{shipment?.ref ?? o.number}</div>
           {o.title && <div className="text-[#5f6b77]">{o.title}</div>}
           <div className="mt-2 grid grid-cols-[auto_auto] justify-end gap-x-3 text-left">
             <span className="text-[#5f6b77]">Date</span>
             <span>{date(o.orderDate)}</span>
+            {shipment && (
+              <>
+                <span className="text-[#5f6b77]">Shipped</span>
+                <span>{date(shipment.shippedOn)}</span>
+                {shipment.carrier && (
+                  <>
+                    <span className="text-[#5f6b77]">Carrier</span>
+                    <span>{shipment.carrier}</span>
+                  </>
+                )}
+                {shipment.consignmentNo && (
+                  <>
+                    <span className="text-[#5f6b77]">Consignment</span>
+                    <span>{shipment.consignmentNo}</span>
+                  </>
+                )}
+              </>
+            )}
             {o.customerReference && (
               <>
                 <span className="text-[#5f6b77]">Your ref.</span>
@@ -119,12 +152,12 @@ export function SalesDocument({ kind, entity, order: o, customer, lines }: { kin
                 <th className="px-2 py-1.5 text-right font-medium">GST</th>
                 <th className="px-2 py-1.5 text-right font-medium">Total ex GST</th>
               </>
-            ) : kind === "picker" ? (
+            ) : (
               <>
-                <th className="px-2 py-1.5 font-medium">Batch no.</th>
-                <th className="px-2 py-1.5 text-center font-medium">Picked ✓</th>
+                {(kind === "picker" || shipment) && <th className="px-2 py-1.5 font-medium">Batch no.</th>}
+                {kind === "picker" && <th className="px-2 py-1.5 text-center font-medium">Picked ✓</th>}
               </>
-            ) : null}
+            )}
           </tr>
         </thead>
         <tbody>
@@ -144,12 +177,16 @@ export function SalesDocument({ kind, entity, order: o, customer, lines }: { kin
                   <td className="px-2 py-1.5 text-right tabular-nums">{pct(l.taxRate)}</td>
                   <td className="px-2 py-1.5 text-right tabular-nums">{money(l.lineSubtotal)}</td>
                 </>
-              ) : kind === "picker" ? (
+              ) : (
                 <>
-                  <td className="px-2 py-1.5">{l.batchNo ?? <span className="inline-block w-24 border-b border-[#9aa5b1]">&nbsp;</span>}</td>
-                  <td className="px-2 py-1.5 text-center">☐</td>
+                  {(kind === "picker" || shipment) && (
+                    <td className="px-2 py-1.5 font-mono text-[11px]">
+                      {l.batchNo ?? (kind === "picker" && !shipment ? <span className="inline-block w-24 border-b border-[#9aa5b1]">&nbsp;</span> : "")}
+                    </td>
+                  )}
+                  {kind === "picker" && <td className="px-2 py-1.5 text-center">{shipment ? "✓" : "☐"}</td>}
                 </>
-              ) : null}
+              )}
             </tr>
           ))}
         </tbody>

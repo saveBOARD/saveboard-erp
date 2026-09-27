@@ -14,6 +14,7 @@
  * - No stock moves: open orders only commit stock; it leaves when they are shipped in the app.
  */
 import "./env";
+import { fixMojibake } from "./text-fix";
 import ExcelJS from "exceljs";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { createDb } from "../src/db/client";
@@ -31,7 +32,7 @@ const text = (v: unknown) => {
   if (v instanceof Date) return v.toISOString().slice(0, 10);
   if (typeof v === "object" && v && "result" in v) return text((v as { result: unknown }).result);
   const s = String(v).trim();
-  return s === "" ? null : s;
+  return s === "" ? null : fixMojibake(s);
 };
 const num = (v: unknown) => {
   const s = text(v);

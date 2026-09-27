@@ -1,12 +1,13 @@
 "use server";
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db, t } from "@/db";
 import { assertEntityAccess, getEntityContext } from "@/lib/dal";
 import { takeNumber } from "@/lib/numbering";
 import { lineAmounts, orderTotals } from "@/lib/orders/calc";
+import { shippedByLine } from "@/lib/orders/shipped";
 
 export type ActionResult = { ok?: true; error?: string; id?: string };
 
@@ -14,6 +15,7 @@ const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a valid date");
 const optText = z.string().trim().max(2000).nullable().transform((v) => (v ? v : null));
 
 const LineSchema = z.object({
+  lineId: z.string().uuid().nullable().optional(), // existing line (kept so shipments stay linked)
   productId: z.string().uuid().nullable(),
   sku: optText,
   description: z.string().trim().min(1, "Every line needs an item or description").max(500),
@@ -122,6 +124,7 @@ export async function saveOrder(input: OrderInput): Promise<ActionResult> {
     });
 
   try {
+    const shippedBefore = v.id ? await shippedByLine([v.id]) : new Map<string, number>();
     const id = await db.transaction(async (tx) => {
       if (v.id) {
         const [existing] = await tx
@@ -132,8 +135,26 @@ export async function saveOrder(input: OrderInput): Promise<ActionResult> {
         if (!(EDITABLE as readonly string[]).includes(existing.status))
           throw new Error(`A ${existing.status} order can't be edited.`);
         await tx.update(t.salesOrders).set(header).where(eq(t.salesOrders.id, v.id));
-        await tx.delete(t.orderLines).where(eq(t.orderLines.orderId, v.id));
-        await tx.insert(t.orderLines).values(lineRows(v.id));
+        // Update lines in place (shipments point at them); add new ones; remove dropped ones unless shipped.
+        const existingLines = await tx.select().from(t.orderLines).where(eq(t.orderLines.orderId, v.id));
+        const shipped = shippedBefore;
+        const rows = lineRows(v.id);
+        const keep = new Set<string>();
+        for (const [i, l] of v.lines.entries()) {
+          const match = l.lineId ? existingLines.find((x) => x.id === l.lineId) : undefined;
+          if (match) {
+            const sent = shipped.get(match.id) ?? 0;
+            if (l.qty < sent - 1e-9) throw new Error(`Line ${i + 1} (${l.description}) has already shipped ${sent}; the quantity can't be lower than that.`);
+            keep.add(match.id);
+            await tx.update(t.orderLines).set(rows[i]).where(eq(t.orderLines.id, match.id));
+          } else {
+            await tx.insert(t.orderLines).values(rows[i]);
+          }
+        }
+        for (const old of existingLines.filter((x) => !keep.has(x.id))) {
+          if ((shipped.get(old.id) ?? 0) > 0) throw new Error(`"${old.description}" has already been shipped, so it can't be removed.`);
+          await tx.delete(t.orderLines).where(eq(t.orderLines.id, old.id));
+        }
         await tx.insert(t.auditLog).values({
           entityId: entity.id,
           userId: user.id,
@@ -240,44 +261,28 @@ export async function convertToOrder(id: string): Promise<ActionResult> {
 }
 
 type OrderStatus = (typeof t.orderStatus.enumValues)[number];
+// "shipped" is reached by recording shipments (createShipment), never set directly.
 const TRANSITIONS: Record<string, OrderStatus[]> = {
-  open: ["picked", "shipped", "cancelled"],
-  picked: ["open", "shipped", "cancelled"],
+  open: ["picked", "cancelled"],
+  picked: ["open", "cancelled"],
   shipped: ["invoiced"],
   invoiced: ["closed"],
 };
 
-/**
- * Sales order status. Shipping takes the goods out of stock: one "shipment" stock movement per stock-tracked line.
- */
+/** Sales order status changes that don't move stock: picked, back to open, cancelled, invoiced, closed. */
 export async function setOrderStatus(id: string, to: OrderStatus): Promise<ActionResult> {
   try {
     const { user, entity, order } = await loadForAction(id);
     if (!(TRANSITIONS[order.status] ?? []).includes(to))
       return { error: `A ${order.status} order can't be moved to ${to}.` };
+    if (to === "cancelled") {
+      const [live] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(t.shipments)
+        .where(and(eq(t.shipments.orderId, id), isNull(t.shipments.reversedAt)));
+      if (live.n > 0) return { error: "Part of this order has shipped. Reverse those shipments first, or reduce the order to what was sent." };
+    }
     await db.transaction(async (tx) => {
-      if (to === "shipped") {
-        const lines = await tx
-          .select({ l: t.orderLines, trackStock: t.products.trackStock, cost: t.products.standardCost })
-          .from(t.orderLines)
-          .innerJoin(t.products, eq(t.products.id, t.orderLines.productId))
-          .where(eq(t.orderLines.orderId, id));
-        const moves = lines
-          .filter((x) => x.trackStock)
-          .map((x) => ({
-            entityId: entity.id,
-            productId: x.l.productId!,
-            kind: "shipment" as const,
-            qty: String(-Number(x.l.qty)),
-            unitCost: x.cost,
-            refType: "sales_order",
-            refId: id,
-            refNumber: order.number,
-            createdBy: user.id,
-            note: `Shipped on ${order.number}`,
-          }));
-        if (moves.length) await tx.insert(t.stockMovements).values(moves);
-      }
       await tx.update(t.salesOrders).set({ status: to }).where(eq(t.salesOrders.id, id));
       await tx.insert(t.auditLog).values({
         entityId: entity.id,
@@ -292,5 +297,167 @@ export async function setOrderStatus(id: string, to: OrderStatus): Promise<Actio
     return { ok: true, id };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Couldn't update the order." };
+  }
+}
+
+const ShipmentSchema = z.object({
+  orderId: z.string().uuid(),
+  shippedOn: isoDate,
+  carrier: optText,
+  consignmentNo: optText,
+  notes: optText,
+  lines: z
+    .array(
+      z.object({
+        orderLineId: z.string().uuid(),
+        qty: z.number().finite().positive(),
+        batchNo: z.string().trim().max(100).nullable().transform((v) => (v ? v : null)),
+      }),
+    )
+    .min(1, "Enter a quantity to ship on at least one line"),
+});
+export type ShipmentInput = z.input<typeof ShipmentSchema>;
+
+/**
+ * Records a (possibly partial) shipment: takes the shipped quantities out of stock with their batch numbers,
+ * and marks the order Shipped once every line has gone.
+ */
+export async function createShipment(input: ShipmentInput): Promise<ActionResult> {
+  try {
+    const parsed = ShipmentSchema.safeParse(input);
+    if (!parsed.success) return { error: parsed.error.issues[0].message };
+    const v = parsed.data;
+    const { user, entity, order } = await loadForAction(v.orderId);
+    if (!["open", "picked"].includes(order.status)) return { error: `A ${order.status} order can't be shipped.` };
+
+    const shipped = await shippedByLine([v.orderId]);
+    await db.transaction(async (tx) => {
+      const lines = await tx
+        .select({ l: t.orderLines, trackStock: t.products.trackStock, cost: t.products.standardCost })
+        .from(t.orderLines)
+        .leftJoin(t.products, eq(t.products.id, t.orderLines.productId))
+        .where(eq(t.orderLines.orderId, v.orderId));
+      const sending = new Map<string, number>();
+      for (const s of v.lines) {
+        const line = lines.find((x) => x.l.id === s.orderLineId);
+        if (!line) throw new Error("A shipment line doesn't belong to this order.");
+        sending.set(s.orderLineId, (sending.get(s.orderLineId) ?? 0) + s.qty);
+      }
+      for (const [lineId, qty] of sending) {
+        const line = lines.find((x) => x.l.id === lineId)!;
+        const outstanding = Number(line.l.qty) - (shipped.get(lineId) ?? 0);
+        if (qty > outstanding + 1e-9)
+          throw new Error(`Line ${line.l.lineNo} (${line.l.description}): only ${outstanding} left to ship, not ${qty}.`);
+      }
+
+      const [{ next }] = await tx
+        .select({ next: sql<number>`coalesce(max(${t.shipments.seq}), 0)::int + 1` })
+        .from(t.shipments)
+        .where(eq(t.shipments.orderId, v.orderId));
+      const ref = `${order.number}/${next}`;
+      const [shipment] = await tx
+        .insert(t.shipments)
+        .values({ entityId: entity.id, orderId: v.orderId, seq: next, shippedOn: v.shippedOn, carrier: v.carrier, consignmentNo: v.consignmentNo, notes: v.notes, createdBy: user.id })
+        .returning({ id: t.shipments.id });
+      await tx.insert(t.shipmentLines).values(
+        v.lines.map((s) => ({
+          shipmentId: shipment.id,
+          orderLineId: s.orderLineId,
+          productId: lines.find((x) => x.l.id === s.orderLineId)!.l.productId,
+          qty: String(s.qty),
+          batchNo: s.batchNo,
+        })),
+      );
+      const moves = v.lines
+        .map((s) => ({ s, line: lines.find((x) => x.l.id === s.orderLineId)! }))
+        .filter(({ line }) => line.l.productId && line.trackStock)
+        .map(({ s, line }) => ({
+          entityId: entity.id,
+          productId: line.l.productId!,
+          kind: "shipment" as const,
+          qty: String(-s.qty),
+          unitCost: line.cost,
+          batchNo: s.batchNo,
+          refType: "sales_order",
+          refId: v.orderId,
+          refNumber: ref,
+          occurredAt: new Date(`${v.shippedOn}T12:00:00`),
+          createdBy: user.id,
+          note: `Shipped on ${ref}`,
+        }));
+      if (moves.length) await tx.insert(t.stockMovements).values(moves);
+
+      const allSent = lines.every((x) => (shipped.get(x.l.id) ?? 0) + (sending.get(x.l.id) ?? 0) >= Number(x.l.qty) - 1e-9);
+      if (allSent) await tx.update(t.salesOrders).set({ status: "shipped" }).where(eq(t.salesOrders.id, v.orderId));
+      await tx.insert(t.auditLog).values({
+        entityId: entity.id,
+        userId: user.id,
+        tableName: "shipments",
+        recordId: shipment.id,
+        action: "create",
+        changes: { shipment: ref, lines: v.lines, orderStatus: allSent ? "shipped" : order.status },
+      });
+    });
+    revalidateSales(v.orderId);
+    revalidatePath("/stock/batches");
+    return { ok: true, id: v.orderId };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Couldn't record the shipment." };
+  }
+}
+
+/**
+ * Undoes a shipment: puts the stock back with reversing movements (nothing is deleted) and reopens the order
+ * if it had been marked Shipped. Not allowed once the order is invoiced.
+ */
+export async function reverseShipment(shipmentId: string): Promise<ActionResult> {
+  try {
+    const { user, entity } = await getEntityContext();
+    await assertEntityAccess(user.id, entity.id);
+    const [s] = await db
+      .select({ s: t.shipments, order: t.salesOrders })
+      .from(t.shipments)
+      .innerJoin(t.salesOrders, eq(t.salesOrders.id, t.shipments.orderId))
+      .where(and(eq(t.shipments.id, shipmentId), eq(t.shipments.entityId, entity.id)));
+    if (!s) return { error: "Shipment not found." };
+    if (s.s.reversedAt) return { error: "This shipment has already been reversed." };
+    if (!["open", "picked", "shipped"].includes(s.order.status)) return { error: `The order is ${s.order.status}, so its shipments can't be reversed.` };
+    const ref = `${s.order.number}/${s.s.seq}`;
+    await db.transaction(async (tx) => {
+      const original = await tx
+        .select()
+        .from(t.stockMovements)
+        .where(and(eq(t.stockMovements.refId, s.order.id), eq(t.stockMovements.refNumber, ref), eq(t.stockMovements.kind, "shipment")));
+      if (original.length)
+        await tx.insert(t.stockMovements).values(
+          original.map((m) => ({
+            entityId: m.entityId,
+            productId: m.productId,
+            kind: "shipment" as const,
+            qty: String(-Number(m.qty)),
+            unitCost: m.unitCost,
+            batchNo: m.batchNo,
+            refType: "sales_order",
+            refId: s.order.id,
+            refNumber: `${ref} reversed`,
+            createdBy: user.id,
+            note: `Reversal of shipment ${ref}`,
+          })),
+        );
+      await tx.update(t.shipments).set({ reversedAt: new Date(), reversedBy: user.id }).where(eq(t.shipments.id, shipmentId));
+      if (s.order.status === "shipped") await tx.update(t.salesOrders).set({ status: "open" }).where(eq(t.salesOrders.id, s.order.id));
+      await tx.insert(t.auditLog).values({
+        entityId: entity.id,
+        userId: user.id,
+        tableName: "shipments",
+        recordId: shipmentId,
+        action: "reverse",
+        changes: { shipment: ref, orderStatus: s.order.status === "shipped" ? { from: "shipped", to: "open" } : s.order.status },
+      });
+    });
+    revalidateSales(s.order.id);
+    return { ok: true, id: s.order.id };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Couldn't reverse the shipment." };
   }
 }

@@ -14,6 +14,7 @@
  *   because replacing opening stock after that would double count.
  */
 import "./env";
+import { fixMojibake } from "./text-fix";
 import ExcelJS from "exceljs";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { createDb } from "../src/db/client";
@@ -31,7 +32,7 @@ const text = (v: unknown) => {
   if (v === null || v === undefined) return null;
   if (typeof v === "object" && "result" in (v as object)) return text((v as { result: unknown }).result);
   const s = String(v).trim();
-  return s === "" ? null : s;
+  return s === "" ? null : fixMojibake(s);
 };
 const num = (v: unknown) => {
   const n = Number(text(v) ?? 0);
@@ -178,6 +179,15 @@ async function main() {
         note: `Opening stock from Katana inventory export ${label}${o.note ? ` — ${o.note}` : ""}`,
       })),
     );
+
+  // quote/order lines imported before a SKU existed get linked to it now
+  const relinked = (await db.execute(sql`
+    update order_lines l set product_id = p.id, updated_at = now()
+    from sales_orders o, products p
+    where l.order_id = o.id and o.entity_id = ${entityId} and p.entity_id = o.entity_id
+      and lower(p.sku) = lower(l.sku) and l.product_id is null and l.sku is not null`)) as unknown as { count?: number; affectedRows?: number };
+  const relinkedCount = relinked.count ?? relinked.affectedRows ?? 0;
+  if (relinkedCount) console.log(`  ~ linked ${relinkedCount} existing quote/order lines to their products`);
 
   for (const s of skipped) console.log(`  ! ${s}`);
   if (zeroed.length) console.log(`  0 negative balances set to zero (${zeroed.length}): ${zeroed.join(", ")}`);

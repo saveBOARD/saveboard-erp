@@ -38,6 +38,7 @@ export async function OrderEditorPage({ kind, id, presetCustomerId }: { kind: "q
       },
       notes: o.notes,
       lines: found.lines.map(({ l }) => ({
+        id: l.id,
         productId: l.productId,
         sku: l.sku,
         description: l.description,

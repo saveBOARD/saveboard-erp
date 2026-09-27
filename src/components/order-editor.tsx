@@ -12,6 +12,7 @@ import type { EditorCustomer, EditorProduct } from "@/lib/queries/editor-data";
 type ShipTo = { name: string; phone: string; line1: string; line2: string; city: string; region: string; postcode: string; country: string };
 type Line = {
   key: string;
+  lineId: string | null; // existing order line (keeps shipments linked)
   itemText: string;
   productId: string | null;
   sku: string | null;
@@ -33,7 +34,7 @@ export type EditorInitial = {
   quoteExpiresOn: string | null;
   shipTo: ShipTo;
   notes: string | null;
-  lines: { productId: string | null; sku: string | null; description: string; qty: number; unitPrice: number; discountPct: number; taxRate: number }[];
+  lines: { id: string; productId: string | null; sku: string | null; description: string; qty: number; unitPrice: number; discountPct: number; taxRate: number }[];
 };
 
 const itemLabel = (p: { sku: string; name: string }) => `${p.sku} — ${p.name}`;
@@ -111,6 +112,7 @@ export function OrderEditor({
           const p = l.productId ? productById.get(l.productId) : undefined;
           return {
             key: newKey(),
+            lineId: l.id,
             itemText: p ? itemLabel(p) : l.sku ? `${l.sku} — ${l.description}` : l.description,
             productId: l.productId,
             sku: l.sku,
@@ -201,7 +203,7 @@ export function OrderEditor({
   function addLine() {
     setLines((ls) => [
       ...ls,
-      { key: newKey(), itemText: "", productId: null, sku: null, description: "", qty: "1", unitPrice: "", discount: "0", tax: exportOrder ? "0" : gstPct },
+      { key: newKey(), lineId: null, itemText: "", productId: null, sku: null, description: "", qty: "1", unitPrice: "", discount: "0", tax: exportOrder ? "0" : gstPct },
     ]);
   }
 
@@ -227,6 +229,7 @@ export function OrderEditor({
       shipToCountry: shipTo.country || null,
       notes: notes || null,
       lines: lines.map((l, i) => ({
+        lineId: l.lineId,
         productId: l.productId,
         sku: l.sku,
         description: l.description || l.itemText,
