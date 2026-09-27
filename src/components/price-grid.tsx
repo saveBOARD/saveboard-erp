@@ -5,6 +5,7 @@ import { Download, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { savePrices } from "@/app/(app)/sell/price-lists/actions";
+import { readPriceSheet } from "@/lib/price-upload";
 import { listPrice, type PriceListData } from "@/lib/pricing";
 
 export type GridItem = {
@@ -113,33 +114,24 @@ export function PriceGrid({ list, defaultList, items, currency }: { list: PriceL
       const ExcelJS = (await import("exceljs")).default;
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(await file.arrayBuffer());
-      const ws = wb.worksheets[0];
-      const cellText = (v: unknown): string => {
-        if (v && typeof v === "object" && "result" in v) return cellText((v as { result: unknown }).result);
-        if (v && typeof v === "object" && "richText" in v) return (v as { richText: { text: string }[] }).richText.map((r) => r.text).join("");
-        return v == null ? "" : String(v).trim();
-      };
-      const header = (ws.getRow(1).values as unknown[]).map((v) => cellText(v).toLowerCase());
-      const skuCol = header.findIndex((h) => h === "sku" || h.includes("sku"));
-      const priceCol = header.findIndex((h) => h.startsWith("price"));
-      if (skuCol < 1 || priceCol < 1) throw new Error('The first row needs a "SKU" column and a "Price" column.');
+      const { prices, broken } = readPriceSheet(wb);
       const bySku = new Map(items.map((i) => [i.sku.toLowerCase(), i]));
       const next: Record<string, string> = {};
       const unknown: string[] = [];
-      ws.eachRow((row, n) => {
-        if (n === 1) return;
-        const sku = cellText(row.getCell(skuCol).value);
-        const price = cellText(row.getCell(priceCol).value).replace(/[$,\s]/g, "");
-        if (!sku || price === "") return;
+      for (const { sku, price } of prices) {
         const item = bySku.get(sku.toLowerCase());
-        if (!item) return void unknown.push(sku);
-        if (!(Number(price) >= 0)) throw new Error(`Row ${n} (${sku}): "${price}" isn't a price.`);
-        next[item.id] = String(Number(price));
-      });
+        if (item) next[item.id] = String(price);
+        else unknown.push(sku);
+      }
       setEdits((e) => ({ ...e, ...next }));
+      const list = (xs: string[]) => `${xs.slice(0, 8).join(", ")}${xs.length > 8 ? "…" : ""}`;
       setMessage({
-        ok: true,
-        text: `${Object.keys(next).length} prices read from ${file.name}${unknown.length ? `; ${unknown.length} SKUs not found (${unknown.slice(0, 5).join(", ")}${unknown.length > 5 ? "…" : ""})` : ""}. Check them, then Save.`,
+        ok: !broken.length,
+        text:
+          `${Object.keys(next).length} prices read from ${file.name}` +
+          (broken.length ? `; ${broken.length} skipped because the price cell isn't a number: ${list(broken)}` : "") +
+          (unknown.length ? `; ${unknown.length} SKUs not in the product list: ${list(unknown)}` : "") +
+          ". Check them, then Save.",
       });
     } catch (e) {
       setMessage({ ok: false, text: e instanceof Error ? e.message : "Couldn't read that file." });
