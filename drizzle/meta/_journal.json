@@ -71,6 +71,13 @@
       "when": 1790490058289,
       "tag": "0009_nappy_yellow_claw",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790492964619,
+      "tag": "0010_secret_gwen_stacy",
+      "breakpoints": true
     }
   ]
 }

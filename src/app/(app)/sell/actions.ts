@@ -6,6 +6,8 @@ import { z } from "zod";
 import { db, t } from "@/db";
 import { assertEntityAccess, getEntityContext } from "@/lib/dal";
 import { dayStamp } from "@/lib/dates";
+import { dueDate } from "@/lib/invoicing/xero";
+import { entityToday } from "@/lib/queries/stock-items";
 import { takeNumber } from "@/lib/numbering";
 import { lineAmounts, orderTotals } from "@/lib/orders/calc";
 import { shippedByLine } from "@/lib/orders/shipped";
@@ -283,8 +285,14 @@ export async function setOrderStatus(id: string, to: OrderStatus): Promise<Actio
         .where(and(eq(t.shipments.orderId, id), isNull(t.shipments.reversedAt)));
       if (live.n > 0) return { error: "Part of this order has shipped. Reverse those shipments first, or reduce the order to what was sent." };
     }
+    let dates = {};
+    if (to === "invoiced") {
+      const [c] = await db.select({ terms: t.customers.paymentTerms }).from(t.customers).where(eq(t.customers.id, order.customerId));
+      const today = entityToday(entity.id);
+      dates = { invoicedOn: today, invoiceDueOn: dueDate(today, c?.terms) };
+    }
     await db.transaction(async (tx) => {
-      await tx.update(t.salesOrders).set({ status: to }).where(eq(t.salesOrders.id, id));
+      await tx.update(t.salesOrders).set({ status: to, ...dates }).where(eq(t.salesOrders.id, id));
       await tx.insert(t.auditLog).values({
         entityId: entity.id,
         userId: user.id,

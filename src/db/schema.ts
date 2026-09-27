@@ -245,6 +245,9 @@ export const salesOrders = pgTable(
     subtotal: money("subtotal").notNull().default("0"),
     tax: money("tax").notNull().default("0"),
     total: money("total").notNull().default("0"),
+    /** Set when the order is marked Invoiced (invoice date and due date sent to Xero). */
+    invoicedOn: date("invoiced_on"),
+    invoiceDueOn: date("invoice_due_on"),
     source: text("source").notNull().default("app"), // "app" | "katana"
     createdBy: uuid("created_by").references(() => users.id),
     ...timestamps,
