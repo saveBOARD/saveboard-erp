@@ -62,6 +62,7 @@ export default async function SalesOrdersPage(props: PageProps<"/sell/orders">) 
       <ListHeader
         tabs={TABS.map((x) => ({ label: x.label, href: x.value === "open" ? "/sell/orders" : `/sell/orders?tab=${x.value}`, active: x === tab }))}
         newLabel="Sales order"
+        newHref="/sell/orders/new"
       />
       <DataTable
         columns={columns}

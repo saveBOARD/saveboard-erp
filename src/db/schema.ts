@@ -37,6 +37,13 @@ export const entities = pgTable("entities", {
   gstRate: numeric("gst_rate", { precision: 5, scale: 4 }).notNull(),
   locationName: text("location_name").notNull(),
   businessNumberLabel: text("business_number_label").notNull(), // NZBN / ABN
+  // Printed on quotes, order acknowledgements and packing slips (Settings > Company details)
+  address: text("address"),
+  phone: text("phone"),
+  email: text("email"),
+  website: text("website"),
+  taxNumber: text("tax_number"), // GST number / ABN
+  quoteTerms: text("quote_terms"),
 });
 
 export const users = pgTable("users", {
@@ -266,6 +273,7 @@ export const orderLines = pgTable(
     taxRate: numeric("tax_rate", { precision: 5, scale: 4 }).notNull(), // 0.15 = 15%
     lineSubtotal: money("line_subtotal").notNull(), // qty x price x (1 - discount), ex tax
     lineTax: money("line_tax").notNull(),
+    batchNo: text("batch_no"), // recorded when picked / shipped (traceability)
     ...timestamps,
   },
   (t) => [index("order_lines_order").on(t.orderId), index("order_lines_product").on(t.productId)],

@@ -62,7 +62,25 @@ body {
   }
 }
 
+/* A4 documents (quotes, acknowledgements, packing slips) */
+.sales-doc {
+  width: 210mm;
+  min-height: 297mm;
+}
+@page {
+  size: A4;
+  margin: 12mm;
+}
+
 @media print {
+  .sales-doc {
+    width: auto;
+    min-height: 0;
+    break-after: page;
+  }
+  .sales-doc:last-child {
+    break-after: auto;
+  }
   .no-print {
     display: none !important;
   }

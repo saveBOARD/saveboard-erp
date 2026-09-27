@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { OrderActions } from "@/components/order-actions";
 import { OrderView } from "@/components/order-view";
 import { getEntityContext } from "@/lib/dal";
 import { getOrder } from "@/lib/queries/orders";
@@ -13,11 +14,14 @@ export default async function QuotePage(props: PageProps<"/sell/quotes/[id]">) {
   if (!found) notFound();
   if (found.order.status !== "quote") redirect(`/sell/orders/${id}`);
   return (
-    <>
-      <OrderView kind="quote" order={found.order} customer={found.customer} lines={found.lines} entityCurrency={entity.currency} backHref="/sell/quotes" />
-      <p className="no-print mx-auto mt-3 max-w-6xl text-xs text-muted">
-        Editing, the customer PDF and one-click conversion to a sales order are the next part of Phase 2.
-      </p>
-    </>
+    <OrderView
+      kind="quote"
+      order={found.order}
+      customer={found.customer}
+      lines={found.lines}
+      entityCurrency={entity.currency}
+      backHref="/sell/quotes"
+      actions={<OrderActions id={id} kind="quote" status={found.order.status} quoteStatus={found.order.quoteStatus} />}
+    />
   );
 }

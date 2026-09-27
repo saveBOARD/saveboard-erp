@@ -66,6 +66,7 @@ export default async function QuotesPage(props: PageProps<"/sell/quotes">) {
       <ListHeader
         tabs={TABS.map((x) => ({ label: x.label, href: x.value === "open" ? "/sell/quotes" : `/sell/quotes?tab=${x.value}`, active: x === tab }))}
         newLabel="Quote"
+        newHref="/sell/quotes/new"
       />
       <DataTable
         columns={columns}

@@ -55,6 +55,7 @@ export function OrderView({
   entityCurrency,
   availability,
   backHref,
+  actions,
 }: {
   kind: "quote" | "order";
   order: Order;
@@ -63,6 +64,7 @@ export function OrderView({
   entityCurrency: string;
   availability?: Map<string, Availability>;
   backHref: string;
+  actions?: React.ReactNode;
 }) {
   const status = ORDER_STATUS[kind === "quote" ? (o.quoteStatus ?? "draft") : o.status];
   const shipTo = address([o.shipToName, o.shipToLine1, o.shipToLine2, [o.shipToCity, o.shipToRegion, o.shipToPostcode].filter(Boolean).join(" "), o.shipToCountry]);
@@ -89,6 +91,7 @@ export function OrderView({
           </div>
           <span className={clsx("rounded px-4 py-1.5 text-sm font-medium", status.className)}>{status.label}</span>
         </div>
+        {actions}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Field label="Customer">{customer.name}</Field>
           <Field label="Customer reference">{o.customerReference}</Field>

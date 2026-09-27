@@ -1,9 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useRef } from "react";
-import { BarChart3, Boxes, ChevronDown, Hammer, LogOut, MapPin, Package, ShoppingBasket, Store, UserCog } from "lucide-react";
+import { BarChart3, Boxes, Building2, ChevronDown, Hammer, LogOut, MapPin, Package, ShoppingBasket, Store, UserCog } from "lucide-react";
 import clsx from "clsx";
 import { SECTIONS } from "@/lib/nav";
 import { switchEntity } from "@/app/(app)/actions";
@@ -43,8 +44,8 @@ export function TopNav({
 
   return (
     <header className="no-print flex flex-wrap items-stretch bg-nav text-nav-ink">
-      <Link href="/" className="flex items-center px-4 py-3 text-xl font-bold tracking-tight">
-        save<span className="text-brand">BOARD</span>
+      <Link href="/" className="flex items-center px-4 py-2" aria-label="saveBOARD home">
+        <Image src="/logo-on-dark.png" alt="saveBOARD" width={600} height={181} priority className="h-9 w-auto" />
       </Link>
       <nav className="flex flex-wrap items-stretch" aria-label="Main">
         {SECTIONS.map((s) => {
@@ -96,9 +97,14 @@ export function TopNav({
               <UserCog className="h-4 w-4" /> Change password
             </Link>
             {user.isAdmin && (
-              <Link href="/settings/users" className="flex items-center gap-2 px-4 py-2 hover:bg-page">
-                <UserCog className="h-4 w-4" /> Users
-              </Link>
+              <>
+                <Link href="/settings/users" className="flex items-center gap-2 px-4 py-2 hover:bg-page">
+                  <UserCog className="h-4 w-4" /> Users
+                </Link>
+                <Link href="/settings/company" className="flex items-center gap-2 px-4 py-2 hover:bg-page">
+                  <Building2 className="h-4 w-4" /> Company details
+                </Link>
+              </>
             )}
             <form action={logout}>
               <button className="flex w-full items-center gap-2 px-4 py-2 text-left hover:bg-page">

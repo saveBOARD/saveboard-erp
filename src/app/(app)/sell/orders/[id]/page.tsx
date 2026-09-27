@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { OrderActions } from "@/components/order-actions";
 import { OrderView } from "@/components/order-view";
 import { getEntityContext } from "@/lib/dal";
 import { stockPosition } from "@/lib/queries/availability";
@@ -23,6 +24,7 @@ export default async function SalesOrderPage(props: PageProps<"/sell/orders/[id]
       entityCurrency={entity.currency}
       availability={lineAvailability}
       backHref="/sell/orders"
+      actions={<OrderActions id={id} kind="order" status={found.order.status} quoteStatus={found.order.quoteStatus} />}
     />
   );
 }
