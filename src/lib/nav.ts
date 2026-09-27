@@ -20,8 +20,8 @@ export const SECTIONS: Section[] = [
     label: "Make",
     href: "/make/orders",
     tabs: [
-      { label: "Manufacturing orders", href: "/make/orders", phase: "4" },
-      { label: "Schedule", href: "/make/schedule", phase: "4" },
+      { label: "Manufacturing orders", href: "/make/orders" },
+      { label: "Schedule", href: "/make/schedule" },
     ],
   },
   {
@@ -50,7 +50,7 @@ export const SECTIONS: Section[] = [
     href: "/items/products",
     tabs: [
       { label: "Products & materials", href: "/items/products" },
-      { label: "Recipes", href: "/items/recipes", phase: "4" },
+      { label: "Recipes", href: "/items/recipes" },
     ],
   },
   {

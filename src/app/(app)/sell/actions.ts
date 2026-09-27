@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db, t } from "@/db";
 import { assertEntityAccess, getEntityContext } from "@/lib/dal";
+import { dayStamp } from "@/lib/dates";
 import { takeNumber } from "@/lib/numbering";
 import { lineAmounts, orderTotals } from "@/lib/orders/calc";
 import { shippedByLine } from "@/lib/orders/shipped";
@@ -381,7 +382,7 @@ export async function createShipment(input: ShipmentInput): Promise<ActionResult
           refType: "sales_order",
           refId: v.orderId,
           refNumber: ref,
-          occurredAt: new Date(`${v.shippedOn}T12:00:00`),
+          occurredAt: dayStamp(v.shippedOn),
           createdBy: user.id,
           note: `Shipped on ${ref}`,
         }));

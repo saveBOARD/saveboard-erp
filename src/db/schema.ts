@@ -489,6 +489,106 @@ export const goodsReceiptLines = pgTable(
   (t) => [index("goods_receipt_lines_receipt").on(t.receiptId), index("goods_receipt_lines_po_line").on(t.poLineId)],
 );
 
+/** Recipe (bill of materials) for a finished product: materials per 1 unit made. */
+export const recipeLines = pgTable(
+  "recipe_lines",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }), // the finished product
+    ingredientId: uuid("ingredient_id")
+      .notNull()
+      .references(() => products.id),
+    qtyPerUnit: qty("qty_per_unit").notNull(),
+    note: text("note"),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (t) => [index("recipe_lines_product").on(t.productId)],
+);
+
+/** Production operations for a product (labour, machine time): hours per 1 unit x cost per hour. */
+export const recipeOperations = pgTable(
+  "recipe_operations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    hoursPerUnit: qty("hours_per_unit").notNull(),
+    costPerHour: money("cost_per_hour").notNull().default("0"),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (t) => [index("recipe_operations_product").on(t.productId)],
+);
+
+export const moStatus = pgEnum("mo_status", ["not_started", "in_progress", "done", "cancelled"]);
+
+/** Manufacturing order (MO-…): makes a product; completing it uses materials and adds finished stock. */
+export const manufacturingOrders = pgTable(
+  "manufacturing_orders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    entityId: text("entity_id").notNull().references(() => entities.id),
+    number: text("number").notNull(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id),
+    plannedQty: qty("planned_qty").notNull(),
+    actualQty: qty("actual_qty"), // set on completion
+    status: moStatus("status").notNull().default("not_started"),
+    productionDeadline: date("production_deadline"),
+    deliveryDeadline: date("delivery_deadline"),
+    salesOrderId: uuid("sales_order_id").references(() => salesOrders.id),
+    batchNo: text("batch_no"), // batch of the finished goods
+    notes: text("notes"),
+    materialsCost: money("materials_cost").notNull().default("0"), // planned until done, then actual
+    operationsCost: money("operations_cost").notNull().default("0"),
+    createdBy: uuid("created_by").references(() => users.id),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    completedBy: uuid("completed_by").references(() => users.id),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("mo_entity_number").on(t.entityId, t.number), index("mo_entity_status").on(t.entityId, t.status)],
+);
+
+export const moMaterials = pgTable(
+  "mo_materials",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    moId: uuid("mo_id")
+      .notNull()
+      .references(() => manufacturingOrders.id, { onDelete: "cascade" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id),
+    plannedQty: qty("planned_qty").notNull(),
+    actualQty: qty("actual_qty"),
+    unitCost: money("unit_cost"), // standard cost when completed
+    batchNo: text("batch_no"), // batch consumed
+    note: text("note"),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (t) => [index("mo_materials_mo").on(t.moId)],
+);
+
+export const moOperations = pgTable(
+  "mo_operations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    moId: uuid("mo_id")
+      .notNull()
+      .references(() => manufacturingOrders.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    plannedHours: qty("planned_hours").notNull(),
+    actualHours: qty("actual_hours"),
+    costPerHour: money("cost_per_hour").notNull().default("0"),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (t) => [index("mo_operations_mo").on(t.moId)],
+);
+
 export const auditLog = pgTable(
   "audit_log",
   {

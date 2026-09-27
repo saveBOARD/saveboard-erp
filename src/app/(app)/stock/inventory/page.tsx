@@ -21,7 +21,7 @@ export default async function InventoryPage(props: PageProps<"/stock/inventory">
   const [products, position, expected] = await Promise.all([productsWithStock(entity.id, filter, true), stockPosition(entity.id), expectedByProduct(entity.id)]);
   const rows = products.map((p) => {
     const committed = position.committed.get(p.id) ?? 0;
-    const exp = expected.get(p.id) ?? 0;
+    const exp = (expected.get(p.id) ?? 0) + (position.expectedFromProduction.get(p.id) ?? 0);
     const available = Math.round((p.inStock - committed) * 10000) / 10000 || 0;
     return { ...p, committed, expected: exp, available, potential: Math.round((available + exp) * 10000) / 10000 || 0 };
   });
@@ -50,8 +50,9 @@ export default async function InventoryPage(props: PageProps<"/stock/inventory">
       />
       <DataTable columns={columns} rows={rows} currency={entity.currency} exportName={`inventory-${entity.id}`} />
       <p className="mt-2 text-xs text-muted">
-        In stock comes from the stock ledger: opening balances from Katana (11/9/26). Committed = open and picked sales
-        orders not yet shipped. Expected = on open purchase orders, not yet received. Available = in stock − committed.
+        In stock comes from the stock ledger. Committed = sales orders not yet shipped + materials for open manufacturing
+        orders. Expected = open purchase orders not yet received + planned output of open manufacturing orders.
+        Available = in stock − committed.
         Potential (hidden column) = available + expected.
       </p>
     </>

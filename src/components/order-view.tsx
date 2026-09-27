@@ -165,6 +165,15 @@ export function OrderView({
                   {showAvailability && (
                     <td className={clsx("border-b border-line px-3 py-2 text-center whitespace-nowrap", AVAILABILITY_CLASS[a])}>
                       {AVAILABILITY_LABEL[a]}
+                      {a === "not_available" && l.productId && (
+                        <Link
+                          href={`/make/orders/new?product=${l.productId}&qty=${Math.max(0, Number(l.qty) - (shipped?.get(l.id) ?? 0))}&so=${o.id}`}
+                          className="no-print ml-2 rounded bg-white/90 px-1.5 py-0.5 text-xs text-link hover:underline"
+                          title="Create a manufacturing order for this line"
+                        >
+                          Make
+                        </Link>
+                      )}
                     </td>
                   )}
                 </tr>

@@ -64,6 +64,13 @@
       "when": 1790489293692,
       "tag": "0008_sparkling_absorbing_man",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790490058289,
+      "tag": "0009_nappy_yellow_claw",
+      "breakpoints": true
     }
   ]
 }

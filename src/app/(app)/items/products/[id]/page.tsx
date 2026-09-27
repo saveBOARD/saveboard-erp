@@ -102,9 +102,21 @@ export default async function ProductPage(props: PageProps<"/items/products/[id]
               {!p.active && <span className="ml-2 text-bad">Inactive</span>}
             </div>
           </div>
-          <Link href={`/items/products/${id}/edit`} className="btn-secondary">
-            <Pencil className="h-4 w-4" /> Edit
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            {p.type === "product" && (
+              <>
+                <Link href={`/items/products/${id}/recipe`} className="btn-secondary">
+                  Recipe
+                </Link>
+                <Link href={`/make/orders/new?product=${id}`} className="btn-secondary">
+                  Make
+                </Link>
+              </>
+            )}
+            <Link href={`/items/products/${id}/edit`} className="btn-secondary">
+              <Pencil className="h-4 w-4" /> Edit
+            </Link>
+          </div>
         </div>
         {p.trackStock ? (
           <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
@@ -139,7 +151,9 @@ export default async function ProductPage(props: PageProps<"/items/products/[id]
                     ? `/stock/adjustments/${m.refId}`
                     : m.refType === "purchase_order" && m.refId
                       ? `/buy/orders/${m.refId}`
-                      : null,
+                      : m.refType === "manufacturing_order" && m.refId
+                        ? `/make/orders/${m.refId}`
+                        : null,
               by,
               note: m.note,
             }))}

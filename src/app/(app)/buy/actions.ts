@@ -7,6 +7,7 @@ import { z } from "zod";
 import { db, t } from "@/db";
 import { diff, formNumber, formText } from "@/lib/audit";
 import { assertEntityAccess, getEntityContext } from "@/lib/dal";
+import { dayStamp } from "@/lib/dates";
 import { takeNumber } from "@/lib/numbering";
 import { lineAmounts, orderTotals } from "@/lib/orders/calc";
 import { receivedByLine } from "@/lib/purchasing/received";
@@ -327,7 +328,7 @@ export async function createReceipt(input: ReceiptInput): Promise<ActionResult> 
           refType: "purchase_order",
           refId: v.poId,
           refNumber: ref,
-          occurredAt: new Date(`${v.receivedOn}T12:00:00`),
+          occurredAt: dayStamp(v.receivedOn),
           createdBy: user.id,
           note: `Received on ${ref}${v.supplierRef ? ` (supplier ref ${v.supplierRef})` : ""}`,
         }));

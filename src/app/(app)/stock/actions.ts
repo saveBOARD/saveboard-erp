@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db, t } from "@/db";
 import type { Db } from "@/db/client";
 import { assertEntityAccess, getEntityContext } from "@/lib/dal";
+import { dayStamp } from "@/lib/dates";
 import { takeNumber } from "@/lib/numbering";
 
 export type ActionResult = { ok?: true; error?: string; id?: string };
@@ -67,7 +68,7 @@ async function postAdjustment(
       refType: "stock_adjustment",
       refId: adj.id,
       refNumber: number,
-      occurredAt: new Date(`${header.adjustedOn}T12:00:00`),
+      occurredAt: dayStamp(header.adjustedOn),
       createdBy: userId,
       note: [header.reason, l.note].filter(Boolean).join(" — "),
     })),

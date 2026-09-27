@@ -18,7 +18,7 @@ import { useEffect, useMemo, useState } from "react";
 
 export type Cell = string | number | boolean | null;
 export type Row = Record<string, Cell>;
-export type Tone = "ok" | "bad" | "pending";
+export type Tone = "ok" | "bad" | "pending" | "info";
 
 export type Column = {
   key: string;
@@ -286,6 +286,7 @@ export function DataTable({
                         tone === "ok" && "bg-ok text-center text-white",
                         tone === "bad" && "bg-bad text-center text-white",
                         tone === "pending" && "bg-pending text-center",
+                        tone === "info" && "bg-[#2f6fb0] text-center text-white",
                         negative && "bg-bad text-white",
                       )}
                     >
