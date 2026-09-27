@@ -83,14 +83,14 @@ async function main() {
   let created = 0;
   const skipped: string[] = [];
 
-  const firstStock = new Map<string, number>();
+  const firstName = new Map<string, string>();
   for (const r of items) {
     let sku = text(r["Variant code / SKU"]);
     const name = text(r["Name"]) ?? sku!;
     let match = (sku && bySku.get(sku.toLowerCase())) || byName.get(name.toLowerCase());
     let key = match?.id ?? sku ?? name;
     if (seen.has(key)) {
-      if (sku && num(r["In stock"]) !== firstStock.get(key)) {
+      if (sku && name.toLowerCase() !== firstName.get(key)) {
         // Katana lets two different items share a code (e.g. LDPESCONBLK: standard and UV sheeting).
         // Keep both: the second becomes "<SKU>-2" so its stock isn't lost. Rename it in the app.
         sku = `${sku}-2`;
@@ -98,12 +98,12 @@ async function main() {
         key = match?.id ?? sku;
         skipped.push(`duplicate code ${sku.slice(0, -2)}: "${name}" kept as separate product ${sku} — give it its own SKU`);
       } else {
-        skipped.push(`duplicate ${sku ?? name} (same stock ${num(r["In stock"])}) — listed twice in Katana, first row kept`);
+        skipped.push(`duplicate ${sku ?? name} (in stock ${num(r["In stock"])}) — same item listed twice in Katana, first row kept`);
         continue;
       }
     }
     seen.add(key);
-    firstStock.set(key, num(r["In stock"]));
+    firstName.set(key, name.toLowerCase());
 
     const category = text(r["Category"]);
     const supplierName = text(r["Default supplier"]);
