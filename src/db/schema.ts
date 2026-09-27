@@ -359,6 +359,36 @@ export const shipmentLines = pgTable(
   (t) => [index("shipment_lines_shipment").on(t.shipmentId), index("shipment_lines_order_line").on(t.orderLineId), index("shipment_lines_batch").on(t.batchNo)],
 );
 
+/**
+ * Sales already shipped in Katana (one row per order line), for reports only: never shown as orders and never
+ * moves stock. Replaced per entity by each import of a Katana "done" sales orders export.
+ */
+export const salesHistory = pgTable(
+  "sales_history",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    entityId: text("entity_id").notNull().references(() => entities.id),
+    soNumber: text("so_number").notNull(), // "SO-706" (Katana's text after the number is in title)
+    title: text("title"),
+    customerName: text("customer_name").notNull(),
+    customerId: uuid("customer_id").references(() => customers.id), // matched on name at import
+    orderDate: date("order_date").notNull(),
+    shippedOn: date("shipped_on"), // Katana's "SO picked date"
+    productId: uuid("product_id").references(() => products.id),
+    sku: text("sku"),
+    description: text("description").notNull(),
+    category: text("category"),
+    qty: qty("qty").notNull(),
+    unitPrice: money("unit_price").notNull(),
+    discountPct: numeric("discount_pct", { precision: 7, scale: 4 }).notNull().default("0"),
+    taxRate: numeric("tax_rate", { precision: 5, scale: 4 }).notNull().default("0"),
+    subtotal: money("subtotal").notNull(), // ex tax, order currency
+    currency: text("currency").notNull(),
+    customerRef: text("customer_ref"),
+  },
+  (t) => [index("sales_history_entity_date").on(t.entityId, t.shippedOn), index("sales_history_entity_so").on(t.entityId, t.soNumber)],
+);
+
 export const returnStatus = pgEnum("return_status", ["open", "received", "cancelled"]);
 
 /**

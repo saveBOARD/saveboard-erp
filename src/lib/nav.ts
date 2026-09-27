@@ -58,7 +58,12 @@ export const SECTIONS: Section[] = [
     key: "insights",
     label: "Insights",
     href: "/insights/dashboard",
-    tabs: [{ label: "Dashboard", href: "/insights/dashboard", phase: "6" }],
+    tabs: [
+      { label: "Dashboard", href: "/insights/dashboard" },
+      { label: "Sales by customer", href: "/insights/sales-by-customer" },
+      { label: "Sales by product", href: "/insights/sales-by-product" },
+      { label: "Sales lines", href: "/insights/sales-lines" },
+    ],
   },
 ];
 

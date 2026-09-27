@@ -18,6 +18,7 @@ switchover loads four exports per entity: customers, inventory, quotes and open 
    | Sell → Quotes → download | `NZ SalesOrders-<date>.xlsx` |
    | Sell → Sales orders → Open → download | `NZ OpenSalesOrders-<date>.xlsx` |
    | Sell → Customers → export for editing | `NZ katana_customers_edit_<date>.xlsx` (optional) |
+   | Sell → Sales orders → Done → download | `NZ DoneSalesOrders-<date>.xlsx` (optional: brings the sales reports' history up to date) |
 3. **Load them.** The script takes the newest file of each kind:
    - rehearsal on the local copy: `powershell -ExecutionPolicy Bypass -File scripts/switchover.ps1`
    - live: `powershell -ExecutionPolicy Bypass -File scripts/switchover.ps1 -Target prod`

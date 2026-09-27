@@ -4,6 +4,7 @@
 #   "<NZ|AUS> InventoryItems-*.xlsx"          Stock > Inventory > download
 #   "<NZ|AUS> SalesOrders-*.xlsx"             Sell > Quotes > download
 #   "<NZ|AUS> OpenSalesOrders-*.xlsx"         Sell > Sales orders > Open > download
+#   "<NZ|AUS> DoneSalesOrders-*.xlsx"         Sell > Sales orders > Done > download   (optional: sales history for reports)
 #
 #   powershell -ExecutionPolicy Bypass -File scripts/switchover.ps1                 # rehearsal on the LOCAL database
 #   powershell -ExecutionPolicy Bypass -File scripts/switchover.ps1 -Target prod    # the real thing (Supabase)
@@ -37,11 +38,12 @@ foreach ($e in $Entities) {
     inventory = Newest "$e InventoryItems-*.xlsx"
     quotes    = Newest "$e SalesOrders-*.xlsx"
     open      = Newest "$e OpenSalesOrders-*.xlsx"
+    history   = Newest "$e DoneSalesOrders-*.xlsx"
   }
   foreach ($k in @("inventory", "quotes", "open")) { if (-not $files[$k]) { throw "$e : no '$k' export found in $folder" } }
   $plan[$e] = $files
   Write-Host "$e files:" -ForegroundColor Yellow
-  foreach ($k in @("customers", "inventory", "quotes", "open")) {
+  foreach ($k in @("customers", "inventory", "quotes", "open", "history")) {
     $f = $files[$k]
     if ($f) { Write-Host ("  {0,-10} {1}  (saved {2:dd/MM/yyyy HH:mm})" -f $k, $f.Name, $f.LastWriteTime) } else { Write-Host "  $k  (none - skipped)" }
   }
@@ -56,6 +58,7 @@ foreach ($e in $Entities) {
   Run @("tsx", "scripts/import-katana-sales.ts", $e, $f.quotes.FullName)
   Run @("tsx", "scripts/import-katana-sales.ts", $e, $f.open.FullName)
   Run @("tsx", "scripts/close-katana-missing.ts", $e, $f.open.FullName, $f.quotes.FullName, "--apply")
+  if ($f.history) { Run @("tsx", "scripts/import-sales-history.ts", $e, $f.history.FullName) }
 }
 Run @("tsx", "scripts/expire-quotes.ts", "365")
 Write-Host "Switchover load finished ($Target). Now check stock value and open orders against Katana." -ForegroundColor Green
