@@ -12,7 +12,7 @@ export const SECTIONS: Section[] = [
       { label: "Sales orders", href: "/sell/orders" },
       { label: "Invoicing", href: "/sell/invoicing" },
       { label: "Returns", href: "/sell/returns" },
-      { label: "Price lists", href: "/sell/price-lists", phase: "2" },
+      { label: "Price lists", href: "/sell/price-lists" },
       { label: "Customers", href: "/sell/customers" },
     ],
   },

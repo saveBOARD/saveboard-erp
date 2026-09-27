@@ -29,7 +29,7 @@ export default async function CustomerPage(props: PageProps<"/sell/customers/[id
   const [c] = await db.select().from(t.customers).where(and(eq(t.customers.id, id), eq(t.customers.entityId, entity.id)));
   if (!c) notFound();
 
-  const [sites, orders] = await Promise.all([
+  const [sites, orders, [priceList]] = await Promise.all([
     db.select().from(t.customerSites).where(eq(t.customerSites.customerId, id)).orderBy(desc(t.customerSites.isDefault), asc(t.customerSites.name)),
     db
       .select({
@@ -46,6 +46,10 @@ export default async function CustomerPage(props: PageProps<"/sell/customers/[id
       .from(t.salesOrders)
       .where(eq(t.salesOrders.customerId, id))
       .orderBy(desc(t.salesOrders.orderDate), desc(t.salesOrders.number)),
+    db
+      .select({ id: t.priceLists.id, name: t.priceLists.name })
+      .from(t.priceLists)
+      .where(c.priceListId ? eq(t.priceLists.id, c.priceListId) : and(eq(t.priceLists.entityId, entity.id), eq(t.priceLists.isDefault, true))),
   ]);
 
   const toEntity = (o: (typeof orders)[number]) => Number(o.total) * Number(o.fxRate);
@@ -108,7 +112,14 @@ export default async function CustomerPage(props: PageProps<"/sell/customers/[id
             {[c.billingLine1, c.billingLine2, [c.billingCity, c.billingRegion, c.billingPostcode].filter(Boolean).join(" "), c.billingCountry].filter(Boolean).join(", ")}
           </Item>
           <Item label="Payment terms">{c.paymentTerms}</Item>
-          <Item label="Price tier">{c.priceTier}</Item>
+          <Item label="Price list">
+            {priceList && (
+              <Link href={`/sell/price-lists/${priceList.id}`} className="text-link hover:underline">
+                {priceList.name}
+                {!c.priceListId && " (default)"}
+              </Link>
+            )}
+          </Item>
           <Item label="Credit limit">{limit !== null ? money(limit, entity.currency) : null}</Item>
           <Item label="Open orders (not yet invoiced)">{money(openBalance, entity.currency)}</Item>
           <Item label="Open quotes">{String(openQuotes)}</Item>

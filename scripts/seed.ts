@@ -6,7 +6,7 @@ import "./env";
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { createDb } from "../src/db/client";
-import { entities, userEntities, users } from "../src/db/schema";
+import { entities, priceLists, userEntities, users } from "../src/db/schema";
 
 const ENTITIES = [
   {
@@ -32,6 +32,11 @@ const ENTITIES = [
 async function main() {
   const db = createDb();
   await db.insert(entities).values(ENTITIES).onConflictDoNothing();
+  // Every entity starts with a default "Standard" price list (customers without a list use it).
+  await db
+    .insert(priceLists)
+    .values(ENTITIES.map((e) => ({ entityId: e.id, name: "Standard", isDefault: true })))
+    .onConflictDoNothing();
 
   const username = (process.env.ADMIN_USERNAME ?? "paul").toLowerCase();
   const password = process.env.ADMIN_PASSWORD;

@@ -22,11 +22,12 @@ export default async function CustomersPage() {
       email: c.email,
       businessNumber: c.businessNumber,
       terms: c.paymentTerms,
-      tier: c.priceTier,
+      priceList: t.priceLists.name,
       creditLimit: c.creditLimit,
       creditHold: c.creditHold,
     })
     .from(c)
+    .leftJoin(t.priceLists, eq(t.priceLists.id, c.priceListId))
     .where(eq(c.entityId, entity.id))
     .orderBy(asc(c.name));
 
@@ -40,7 +41,7 @@ export default async function CustomersPage() {
     { key: "email", label: "Email" },
     { key: "businessNumber", label: entity.businessNumberLabel, hidden: true },
     { key: "terms", label: "Payment terms" },
-    { key: "tier", label: "Price tier" },
+    { key: "priceList", label: "Price list" },
     { key: "creditLimit", label: "Credit limit", kind: "money" },
     { key: "creditHold", label: "Credit hold", kind: "bool", tones: { true: "bad" } },
   ];
@@ -50,7 +51,7 @@ export default async function CustomersPage() {
       <ListHeader newLabel="Customer" newHref="/sell/customers/new" />
       <DataTable
         columns={columns}
-        rows={rows.map((r) => ({ ...r, creditLimit: r.creditLimit === null ? null : Number(r.creditLimit) }))}
+        rows={rows.map((r) => ({ ...r, priceList: r.priceList ?? "Default", creditLimit: r.creditLimit === null ? null : Number(r.creditLimit) }))}
         currency={entity.currency}
         exportName={`customers-${entity.id}`}
         noun="customers"

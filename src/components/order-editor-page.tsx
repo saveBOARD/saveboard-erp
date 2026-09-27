@@ -57,6 +57,8 @@ export async function OrderEditorPage({ kind, id, presetCustomerId }: { kind: "q
       entity={{ id: entity.id, currency: entity.currency, gstRate: Number(entity.gstRate) }}
       customers={data.customers}
       products={data.products}
+      priceLists={data.priceLists}
+      customerPrices={data.customerPrices}
       initial={initial}
       today={today}
       presetCustomerId={presetCustomerId}

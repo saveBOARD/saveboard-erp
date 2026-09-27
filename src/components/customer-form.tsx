@@ -7,7 +7,6 @@ import type { t } from "@/db";
 
 type Customer = typeof t.customers.$inferSelect;
 
-export const PRICE_TIERS = ["Standard", "Wholesale", "Installer", "End User", "Export"];
 const TERMS = ["COD", "7 days", "14 days", "20th of the month following", "Net 30", "Prepaid"];
 
 function Field({ label, name, defaultValue, type = "text", wide, list, placeholder }: {
@@ -27,7 +26,15 @@ function Field({ label, name, defaultValue, type = "text", wide, list, placehold
   );
 }
 
-export function CustomerForm({ customer, entity }: { customer?: Customer; entity: { id: string; currency: string; businessNumberLabel: string } }) {
+export function CustomerForm({
+  customer,
+  entity,
+  priceLists,
+}: {
+  customer?: Customer;
+  entity: { id: string; currency: string; businessNumberLabel: string };
+  priceLists: { id: string; name: string; isDefault: boolean }[];
+}) {
   const [state, action, pending] = useActionState(saveCustomer, undefined);
   const c = customer;
   return (
@@ -66,12 +73,16 @@ export function CustomerForm({ customer, entity }: { customer?: Customer; entity
         <Field label={entity.businessNumberLabel} name="businessNumber" defaultValue={c?.businessNumber} />
         <Field label="Payment terms" name="paymentTerms" defaultValue={c?.paymentTerms} list="terms-options" />
         <label className="grid gap-1 text-xs text-muted">
-          Price tier
-          <select id="priceTier" name="priceTier" defaultValue={c?.priceTier ?? ""} className="input text-sm text-ink">
-            <option value="">—</option>
-            {PRICE_TIERS.map((p) => (
-              <option key={p}>{p}</option>
-            ))}
+          Price list
+          <select id="priceListId" name="priceListId" defaultValue={c?.priceListId ?? ""} className="input text-sm text-ink">
+            <option value="">Default ({priceLists.find((p) => p.isDefault)?.name ?? "none"})</option>
+            {priceLists
+              .filter((p) => !p.isDefault)
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
           </select>
         </label>
         <Field label={`Credit limit (${entity.currency})`} name="creditLimit" type="number" defaultValue={c?.creditLimit ? String(Number(c.creditLimit)) : ""} />

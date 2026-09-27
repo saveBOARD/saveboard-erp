@@ -85,6 +85,13 @@
       "when": 1790535666810,
       "tag": "0011_hard_dormammu",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790537693514,
+      "tag": "0012_light_devos",
+      "breakpoints": true
     }
   ]
 }

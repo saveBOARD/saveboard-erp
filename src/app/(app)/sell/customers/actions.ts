@@ -45,7 +45,7 @@ export async function saveCustomer(_: FormState, fd: FormData): Promise<FormStat
       email: formText(fd, "email"),
       businessNumber: formText(fd, "businessNumber"),
       paymentTerms: formText(fd, "paymentTerms"),
-      priceTier: formText(fd, "priceTier"),
+      priceListId: formText(fd, "priceListId"),
       creditLimit: creditLimit === null ? null : String(creditLimit),
       creditHold: fd.get("creditHold") === "on",
       notes: formText(fd, "notes", 5000),
@@ -62,6 +62,13 @@ export async function saveCustomer(_: FormState, fd: FormData): Promise<FormStat
         ),
       );
     if (clash) return { error: `There is already a customer called "${name}".` };
+    if (values.priceListId) {
+      const [pl] = await db
+        .select({ id: t.priceLists.id })
+        .from(t.priceLists)
+        .where(and(eq(t.priceLists.id, values.priceListId), eq(t.priceLists.entityId, entity.id)));
+      if (!pl) return { error: "That price list isn't in this entity." };
+    }
 
     if (id) {
       const before = await ownCustomer(entity.id, id);

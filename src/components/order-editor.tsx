@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { saveOrder, type OrderInput } from "@/app/(app)/sell/actions";
 import { defaultTaxRate, isExport, lineAmounts, orderTotals } from "@/lib/orders/calc";
+import { suggestPrice, type PriceListData } from "@/lib/pricing";
 import type { EditorCustomer, EditorProduct } from "@/lib/queries/editor-data";
 
 type ShipTo = { name: string; phone: string; line1: string; line2: string; city: string; region: string; postcode: string; country: string };
@@ -19,6 +20,8 @@ type Line = {
   description: string;
   qty: string;
   unitPrice: string;
+  /** Where an automatically filled price came from; null once the price is typed by hand. */
+  priceSource?: string | null;
   discount: string; // percent, e.g. "10"
   tax: string; // percent, e.g. "15"
 };
@@ -59,6 +62,8 @@ export function OrderEditor({
   entity,
   customers,
   products,
+  priceLists,
+  customerPrices,
   initial,
   today,
   presetCustomerId,
@@ -67,6 +72,9 @@ export function OrderEditor({
   entity: { id: string; currency: string; gstRate: number };
   customers: EditorCustomer[];
   products: EditorProduct[];
+  priceLists: PriceListData[];
+  /** Last price charged per "customerId|productId". */
+  customerPrices: Record<string, number>;
   initial?: EditorInitial;
   today: string;
   /** New document started from a customer's page. */
@@ -180,22 +188,48 @@ export function OrderEditor({
     setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   }
 
+  const customerList = customer?.priceListId ? priceLists.find((pl) => pl.id === customer.priceListId) : priceLists.find((pl) => pl.isDefault);
+  const priceFor = (p: EditorProduct) =>
+    suggestPrice({
+      productId: p.id,
+      customerListId: customer?.priceListId ?? null,
+      lists: priceLists,
+      lastForCustomer: customerId ? customerPrices[`${customerId}|${p.id}`] : null,
+      lastForAnyone: p.lastPrice,
+    });
+
   function chooseItem(key: string, text: string) {
     const p = productByLabel.get(text.trim().toLowerCase());
     setLines((ls) =>
       ls.map((l) => {
         if (l.key !== key) return l;
         if (!p) return { ...l, itemText: text, productId: null, sku: null, description: text };
-        const priceUnset = !l.unitPrice || Number(l.unitPrice) === 0;
+        // Fill the price if there isn't one yet, or if the current one was filled automatically too.
+        const priceUnset = !l.unitPrice || Number(l.unitPrice) === 0 || !!l.priceSource;
+        const s = priceUnset ? priceFor(p) : null;
         return {
           ...l,
           itemText: text,
           productId: p.id,
           sku: p.sku,
           description: p.name,
-          unitPrice: priceUnset && p.lastPrice !== null ? String(p.lastPrice) : l.unitPrice,
+          unitPrice: s ? String(s.price) : l.unitPrice,
+          priceSource: s ? s.source : priceUnset ? null : l.priceSource,
           tax: pctText(defaultTaxRate({ gstRate: entity.gstRate, exportOrder, isService: p.isService })),
         };
+      }),
+    );
+  }
+
+  /** Re-price every product line from the customer's price list (e.g. after changing the customer). */
+  function applyPriceList() {
+    const manual = lines.filter((l) => l.productId && !l.priceSource && Number(l.unitPrice) > 0).length;
+    if (manual && !window.confirm(`Replace the prices on all product lines, including ${manual} typed or saved by hand?`)) return;
+    setLines((ls) =>
+      ls.map((l) => {
+        const p = l.productId ? productById.get(l.productId) : undefined;
+        const s = p ? priceFor(p) : null;
+        return s ? { ...l, unitPrice: String(s.price), priceSource: s.source } : l;
       }),
     );
   }
@@ -365,7 +399,20 @@ export function OrderEditor({
                     </div>
                   </td>
                   <td className="border-b border-line px-2 py-1.5">
-                    <input aria-label={`Line ${i + 1} price`} type="number" min="0" step="any" value={l.unitPrice} onChange={(e) => updateLine(l.key, { unitPrice: e.target.value })} className="input w-full text-right" />
+                    <input
+                      aria-label={`Line ${i + 1} price`}
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={l.unitPrice}
+                      onChange={(e) => updateLine(l.key, { unitPrice: e.target.value, priceSource: null })}
+                      className="input w-full text-right"
+                    />
+                    {l.priceSource && (
+                      <div className="mt-0.5 max-w-28 truncate text-right text-[11px] text-muted" title={`Price from ${l.priceSource}`}>
+                        {l.priceSource}
+                      </div>
+                    )}
                   </td>
                   <td className="border-b border-line px-2 py-1.5">
                     <input aria-label={`Line ${i + 1} discount`} type="number" min="0" max="100" step="any" value={l.discount} onChange={(e) => updateLine(l.key, { discount: e.target.value })} className="input w-full text-right" />
@@ -390,9 +437,22 @@ export function OrderEditor({
           <tfoot>
             <tr>
               <td colSpan={6} className="px-2 py-2">
-                <button type="button" onClick={addLine} className="btn-secondary">
-                  <Plus className="h-4 w-4" /> Add line
-                </button>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button type="button" onClick={addLine} className="btn-secondary">
+                    <Plus className="h-4 w-4" /> Add line
+                  </button>
+                  {customerList && lines.some((l) => l.productId) && (
+                    <button type="button" onClick={applyPriceList} className="btn-secondary" title="Re-price every product line from this customer's price list">
+                      Apply price list
+                    </button>
+                  )}
+                  {customer && customerList && (
+                    <span className="text-xs text-muted">
+                      Price list: <b>{customerList.name}</b>
+                      {!customer.priceListId && " (default)"}
+                    </span>
+                  )}
+                </div>
               </td>
               <td className="px-2 pt-2 text-right tabular-nums">
                 <div className="text-xs text-muted">Subtotal</div>

@@ -116,7 +116,8 @@ export const customers = pgTable(
     email: text("email"),
     businessNumber: text("business_number"),
     paymentTerms: text("payment_terms"),
-    priceTier: text("price_tier"),
+    priceTier: text("price_tier"), // legacy text from the workbooks; replaced by priceListId
+    priceListId: uuid("price_list_id").references(() => priceLists.id), // null = the entity's default list
     creditLimit: money("credit_limit"),
     creditHold: boolean("credit_hold").notNull().default(false),
     notes: text("notes"),
@@ -168,6 +169,40 @@ export const products = pgTable(
     ...timestamps,
   },
   (t) => [uniqueIndex("products_entity_sku").on(t.entityId, t.sku)],
+);
+
+/**
+ * Selling price lists (ex GST, entity currency). One per entity is the default ("Standard"); customers without a
+ * list use it. A list can also be "default less/plus N%" (adjustPct, e.g. -0.15), with its own prices overriding.
+ */
+export const priceLists = pgTable(
+  "price_lists",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    entityId: text("entity_id").notNull().references(() => entities.id),
+    name: text("name").notNull(),
+    isDefault: boolean("is_default").notNull().default(false),
+    adjustPct: numeric("adjust_pct", { precision: 7, scale: 4 }), // -0.15 = 15% below the default list
+    notes: text("notes"),
+    active: boolean("active").notNull().default(true),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("price_lists_entity_name").on(t.entityId, t.name)],
+);
+
+export const priceListItems = pgTable(
+  "price_list_items",
+  {
+    priceListId: uuid("price_list_id")
+      .notNull()
+      .references(() => priceLists.id, { onDelete: "cascade" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    price: money("price").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.priceListId, t.productId] }), index("price_list_items_product").on(t.productId)],
 );
 
 export const movementKind = pgEnum("movement_kind", [
