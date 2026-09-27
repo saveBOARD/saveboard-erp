@@ -43,6 +43,7 @@ server actions); the browser never queries tables directly.
   Track Stock = No (freight, Hiab, picking fee, …) never create movements or SHORT/REORDER flags.
 - Batch numbers are recorded on MO output and on shipment lines (traceability).
 - **Cost and margin never appear** on picking slips, packing slips or work orders.
+- **Exports are zero-rated**: goods on export orders carry 0% GST; only freight is charged GST (Paul, 27/9/26).
 - One sales order = one invoice (no split/progress invoicing). Invoicing is manual, not automatic on Shipped.
 - Sales order status: Open → Picked → Shipped → Invoiced → Closed; partial shipments allowed; orders editable after
   confirmation with an audit trail. Stock shortfalls are flagged for a person — never auto-create POs/MOs.

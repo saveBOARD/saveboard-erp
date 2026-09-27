@@ -18,7 +18,9 @@
     "db:expire-quotes": "tsx scripts/expire-quotes.ts",
     "db:expire-quotes:prod": "tsx scripts/expire-quotes.ts --prod",
     "db:import-katana": "tsx scripts/import-katana-sales.ts",
-    "db:import-katana:prod": "tsx scripts/import-katana-sales.ts --prod"
+    "db:import-katana:prod": "tsx scripts/import-katana-sales.ts --prod",
+    "db:import-inventory": "tsx scripts/import-katana-inventory.ts",
+    "db:import-inventory:prod": "tsx scripts/import-katana-inventory.ts --prod"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",
