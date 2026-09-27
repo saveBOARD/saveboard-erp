@@ -137,7 +137,9 @@ export default async function ProductPage(props: PageProps<"/items/products/[id]
                   ? `/sell/orders/${m.refId}`
                   : m.refType === "stock_adjustment" && m.refId
                     ? `/stock/adjustments/${m.refId}`
-                    : null,
+                    : m.refType === "purchase_order" && m.refId
+                      ? `/buy/orders/${m.refId}`
+                      : null,
               by,
               note: m.note,
             }))}

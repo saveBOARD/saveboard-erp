@@ -29,7 +29,7 @@ export const SECTIONS: Section[] = [
     label: "Buy",
     href: "/buy/orders",
     tabs: [
-      { label: "Purchase orders", href: "/buy/orders", phase: "4" },
+      { label: "Purchase orders", href: "/buy/orders" },
       { label: "Suppliers", href: "/buy/suppliers" },
     ],
   },

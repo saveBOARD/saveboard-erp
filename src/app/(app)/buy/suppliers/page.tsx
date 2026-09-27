@@ -26,7 +26,7 @@ export default async function SuppliersPage() {
     .orderBy(asc(s.name));
 
   const columns: Column[] = [
-    { key: "name", label: "Name", width: 240 },
+    { key: "name", label: "Name", width: 240, href: "/buy/suppliers/{id}" },
     { key: "contact", label: "Contact" },
     { key: "phone", label: "Phone" },
     { key: "email", label: "Email" },
@@ -37,7 +37,7 @@ export default async function SuppliersPage() {
 
   return (
     <>
-      <ListHeader newLabel="Supplier" />
+      <ListHeader newLabel="Supplier" newHref="/buy/suppliers/new" />
       <DataTable columns={columns} rows={rows} exportName={`suppliers-${entity.id}`} noun="suppliers" />
     </>
   );

@@ -57,6 +57,13 @@
       "when": 1790487813822,
       "tag": "0007_abnormal_proudstar",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790489293692,
+      "tag": "0008_sparkling_absorbing_man",
+      "breakpoints": true
     }
   ]
 }

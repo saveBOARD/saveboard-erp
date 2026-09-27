@@ -399,6 +399,96 @@ export const stocktakeLines = pgTable(
   (t) => [uniqueIndex("stocktake_lines_item").on(t.stocktakeId, t.productId)],
 );
 
+export const poStatus = pgEnum("po_status", ["draft", "open", "received", "cancelled"]);
+
+/** Purchase order to a supplier. Draft -> open (placed) -> received (automatically when every line has arrived). */
+export const purchaseOrders = pgTable(
+  "purchase_orders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    entityId: text("entity_id").notNull().references(() => entities.id),
+    number: text("number").notNull(), // PO-23
+    title: text("title"), // Katana style reference after the number, e.g. "White LDPE"
+    supplierId: uuid("supplier_id")
+      .notNull()
+      .references(() => suppliers.id),
+    status: poStatus("status").notNull().default("draft"),
+    billed: boolean("billed").notNull().default(false),
+    orderDate: date("order_date").notNull(),
+    expectedOn: date("expected_on"),
+    currency: text("currency").notNull(),
+    fxRate: numeric("fx_rate", { precision: 14, scale: 6 }).notNull().default("1"), // entity currency per 1 PO currency
+    notes: text("notes"),
+    subtotal: money("subtotal").notNull().default("0"),
+    tax: money("tax").notNull().default("0"),
+    total: money("total").notNull().default("0"),
+    source: text("source").notNull().default("app"),
+    createdBy: uuid("created_by").references(() => users.id),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("purchase_orders_entity_number").on(t.entityId, t.number), index("purchase_orders_supplier").on(t.supplierId)],
+);
+
+export const poLines = pgTable(
+  "po_lines",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    poId: uuid("po_id")
+      .notNull()
+      .references(() => purchaseOrders.id, { onDelete: "cascade" }),
+    lineNo: integer("line_no").notNull(),
+    productId: uuid("product_id").references(() => products.id),
+    sku: text("sku"),
+    description: text("description").notNull(),
+    qty: qty("qty").notNull(),
+    unitPrice: money("unit_price").notNull(), // in the PO currency
+    taxRate: numeric("tax_rate", { precision: 5, scale: 4 }).notNull(),
+    lineSubtotal: money("line_subtotal").notNull(),
+    lineTax: money("line_tax").notNull(),
+    ...timestamps,
+  },
+  (t) => [index("po_lines_po").on(t.poId), index("po_lines_product").on(t.productId)],
+);
+
+/** A delivery received against a PO (PO-23/1, PO-23/2 …). Adds stock. Reversed receipts stay on record. */
+export const goodsReceipts = pgTable(
+  "goods_receipts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    entityId: text("entity_id").notNull().references(() => entities.id),
+    poId: uuid("po_id")
+      .notNull()
+      .references(() => purchaseOrders.id),
+    seq: integer("seq").notNull(),
+    receivedOn: date("received_on").notNull(),
+    supplierRef: text("supplier_ref"), // delivery docket / packing slip number
+    notes: text("notes"),
+    createdBy: uuid("created_by").references(() => users.id),
+    reversedAt: timestamp("reversed_at", { withTimezone: true }),
+    reversedBy: uuid("reversed_by").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("goods_receipts_po_seq").on(t.poId, t.seq)],
+);
+
+export const goodsReceiptLines = pgTable(
+  "goods_receipt_lines",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    receiptId: uuid("receipt_id")
+      .notNull()
+      .references(() => goodsReceipts.id, { onDelete: "cascade" }),
+    poLineId: uuid("po_line_id")
+      .notNull()
+      .references(() => poLines.id), // no cascade: a received line can't be deleted
+    productId: uuid("product_id").references(() => products.id),
+    qty: qty("qty").notNull(),
+    unitCost: money("unit_cost").notNull(), // in the entity currency
+    batchNo: text("batch_no"),
+  },
+  (t) => [index("goods_receipt_lines_receipt").on(t.receiptId), index("goods_receipt_lines_po_line").on(t.poLineId)],
+);
+
 export const auditLog = pgTable(
   "audit_log",
   {
