@@ -28,6 +28,8 @@ export type Column = {
   total?: boolean;
   /** Link the cell, e.g. "/sell/customers/{id}". */
   href?: string;
+  /** Link the cell to the URL held in this row field (for rows that link to different places). */
+  hrefKey?: string;
   /** For numbers: a row field holding the unit (e.g. "uom"), shown after the value. */
   unitKey?: string;
   /** For money: a row field holding that row's currency (e.g. a USD export order). Don't total such columns. */
@@ -272,7 +274,9 @@ export function DataTable({
                   const text = display(col, v, currency, r.original);
                   const tone = col.tones && v !== null ? col.tones[String(v)] : undefined;
                   const negative = col.negativeAlert && numeric && Number(v) < 0;
-                  const href = col.href?.replace(/\{(\w+)\}/g, (_, k) => encodeURIComponent(String(r.original[k] ?? "")));
+                  const href = col.hrefKey
+                    ? (r.original[col.hrefKey] as string | null) ?? undefined
+                    : col.href?.replace(/\{(\w+)\}/g, (_, k) => encodeURIComponent(String(r.original[k] ?? "")));
                   return (
                     <td
                       key={cell.id}

@@ -60,6 +60,7 @@ export function OrderEditor({
   products,
   initial,
   today,
+  presetCustomerId,
 }: {
   kind: "quote" | "order";
   entity: { id: string; currency: string; gstRate: number };
@@ -67,6 +68,8 @@ export function OrderEditor({
   products: EditorProduct[];
   initial?: EditorInitial;
   today: string;
+  /** New document started from a customer's page. */
+  presetCustomerId?: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -77,14 +80,30 @@ export function OrderEditor({
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const productByLabel = useMemo(() => new Map(products.map((p) => [itemLabel(p).toLowerCase(), p])), [products]);
 
-  const [customerId, setCustomerId] = useState(initial?.customerId ?? "");
-  const [customerText, setCustomerText] = useState(initial ? (customerById.get(initial.customerId)?.name ?? "") : "");
+  const preset = !initial && presetCustomerId ? customerById.get(presetCustomerId) : undefined;
+  const presetSite = preset ? (preset.sites.find((s) => s.isDefault) ?? preset.sites[0]) : undefined;
+  const [customerId, setCustomerId] = useState(initial?.customerId ?? preset?.id ?? "");
+  const [customerText, setCustomerText] = useState(initial ? (customerById.get(initial.customerId)?.name ?? "") : (preset?.name ?? ""));
   const [title, setTitle] = useState(initial?.title ?? "");
   const [customerReference, setCustomerReference] = useState(initial?.customerReference ?? "");
   const [orderDate, setOrderDate] = useState(initial?.orderDate ?? today);
   const [deliveryDeadline, setDeliveryDeadline] = useState(initial?.deliveryDeadline ?? "");
   const [quoteExpiresOn, setQuoteExpiresOn] = useState(initial?.quoteExpiresOn ?? "");
-  const [shipTo, setShipTo] = useState<ShipTo>(initial?.shipTo ?? emptyShipTo);
+  const [shipTo, setShipTo] = useState<ShipTo>(
+    initial?.shipTo ??
+      (presetSite
+        ? {
+            name: presetSite.contactName ?? "",
+            phone: presetSite.contactPhone ?? "",
+            line1: presetSite.line1 ?? "",
+            line2: presetSite.line2 ?? "",
+            city: presetSite.city ?? "",
+            region: presetSite.region ?? "",
+            postcode: presetSite.postcode ?? "",
+            country: presetSite.country ?? preset?.country ?? "",
+          }
+        : { ...emptyShipTo, country: preset?.country ?? "" }),
+  );
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [lines, setLines] = useState<Line[]>(() =>
     initial

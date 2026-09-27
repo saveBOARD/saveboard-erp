@@ -20,7 +20,7 @@ export default async function ProductsPage(props: PageProps<"/items/products">) 
   const rows = await productsWithStock(entity.id, filter);
 
   const columns: Column[] = [
-    { key: "name", label: "Name", width: 240 },
+    { key: "name", label: "Name", width: 240, href: "/items/products/{id}" },
     { key: "sku", label: "Variant code / SKU" },
     { key: "typeLabel", label: "Type" },
     { key: "category", label: "Category" },
@@ -36,6 +36,7 @@ export default async function ProductsPage(props: PageProps<"/items/products">) 
       <ListHeader
         tabs={TABS.map((x) => ({ label: x.label, href: x.value === "all" ? "/items/products" : `/items/products?type=${x.value}`, active: x.value === filter }))}
         newLabel="Item"
+        newHref="/items/products/new"
       />
       <DataTable columns={columns} rows={rows} currency={entity.currency} exportName={`items-${entity.id}`} />
     </>

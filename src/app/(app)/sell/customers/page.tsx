@@ -31,7 +31,7 @@ export default async function CustomersPage() {
     .orderBy(asc(c.name));
 
   const columns: Column[] = [
-    { key: "name", label: "Name", width: 220 },
+    { key: "name", label: "Name", width: 220, href: "/sell/customers/{id}" },
     { key: "code", label: "ID", hidden: true },
     { key: "city", label: "City" },
     { key: "region", label: entity.id === "AUS" ? "State" : "Region" },
@@ -47,7 +47,7 @@ export default async function CustomersPage() {
 
   return (
     <>
-      <ListHeader newLabel="Customer" />
+      <ListHeader newLabel="Customer" newHref="/sell/customers/new" />
       <DataTable
         columns={columns}
         rows={rows.map((r) => ({ ...r, creditLimit: r.creditLimit === null ? null : Number(r.creditLimit) }))}

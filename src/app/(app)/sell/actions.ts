@@ -66,10 +66,12 @@ export async function saveOrder(input: OrderInput): Promise<ActionResult> {
   const v = parsed.data;
 
   const [customer] = await db
-    .select({ id: t.customers.id })
+    .select({ id: t.customers.id, name: t.customers.name, creditHold: t.customers.creditHold })
     .from(t.customers)
     .where(and(eq(t.customers.id, v.customerId), eq(t.customers.entityId, entity.id)));
   if (!customer) return { error: "That customer isn't in this entity's customer list." };
+  if (v.kind === "order" && !v.id && customer.creditHold)
+    return { error: `${customer.name} is on credit hold, so a new sales order can't be created. Save it as a quote, or release the hold on the customer first.` };
 
   const productIds = [...new Set(v.lines.map((l) => l.productId).filter((x): x is string => !!x))];
   if (productIds.length) {
@@ -213,6 +215,12 @@ export async function convertToOrder(id: string): Promise<ActionResult> {
   try {
     const { user, entity, order } = await loadForAction(id);
     if (order.status !== "quote") return { error: "This quote has already been converted." };
+    const [customer] = await db
+      .select({ name: t.customers.name, creditHold: t.customers.creditHold })
+      .from(t.customers)
+      .where(eq(t.customers.id, order.customerId));
+    if (customer?.creditHold)
+      return { error: `${customer.name} is on credit hold. Release the hold on the customer before converting this quote to an order.` };
     await db.transaction(async (tx) => {
       await tx.update(t.salesOrders).set({ status: "open", quoteStatus: "accepted" }).where(eq(t.salesOrders.id, id));
       await tx.insert(t.auditLog).values({

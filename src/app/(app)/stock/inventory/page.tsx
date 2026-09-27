@@ -25,7 +25,7 @@ export default async function InventoryPage(props: PageProps<"/stock/inventory">
   const negatives = rows.filter((r) => r.inStock < 0).length;
 
   const columns: Column[] = [
-    { key: "name", label: "Name", width: 240 },
+    { key: "name", label: "Name", width: 240, href: "/items/products/{id}" },
     { key: "sku", label: "Variant code / SKU" },
     { key: "category", label: "Category" },
     { key: "supplier", label: "Default supplier" },
