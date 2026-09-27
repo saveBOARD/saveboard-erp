@@ -1,0 +1,1 @@
+ALTER TABLE "sales_orders" ADD COLUMN "fx_rate" numeric(14, 6) DEFAULT '1' NOT NULL;

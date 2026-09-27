@@ -30,6 +30,8 @@ export type Column = {
   href?: string;
   /** For numbers: a row field holding the unit (e.g. "uom"), shown after the value. */
   unitKey?: string;
+  /** For money: a row field holding that row's currency (e.g. a USD export order). Don't total such columns. */
+  currencyKey?: string;
   /** Highlight negative numbers in red, like Katana's negative stock. */
   negativeAlert?: boolean;
   /** Status cells: value -> colour. */
@@ -45,7 +47,7 @@ function display(col: Column, v: Cell, currency: string, row: Row) {
   if (v === null || v === "") return "";
   switch (col.kind) {
     case "money":
-      return `${fmtMoney.format(Number(v))} ${currency}`;
+      return `${fmtMoney.format(Number(v))} ${(col.currencyKey && row[col.currencyKey]) || currency}`;
     case "number": {
       const unit = col.unitKey ? row[col.unitKey] : null;
       return unit ? `${fmt.format(Number(v))} ${unit}` : fmt.format(Number(v));

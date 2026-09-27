@@ -37,6 +37,15 @@ const num = (v: unknown) => {
   return Number.isFinite(n) ? n : 0;
 };
 const round = (n: number, dp = 4) => Math.round(n * 10 ** dp) / 10 ** dp;
+/**
+ * Katana exports discounts two ways: as text ("15.00%") or as an Excel percentage cell (0.15).
+ * Returns a fraction (0.15 = 15%).
+ */
+const discountFraction = (v: unknown) => {
+  const raw = v && typeof v === "object" && "result" in v ? (v as { result: unknown }).result : v;
+  if (typeof raw === "number") return raw > 1 ? raw / 100 : raw;
+  return num(raw) / 100;
+};
 const isoDate = (v: unknown) => {
   const s = text(v);
   return s && /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : null;
@@ -142,7 +151,7 @@ async function main() {
       if (sku && !productId) unknownSkuLines++;
       const qty = num(l["Quantity"]);
       const unitPrice = num(l["Price per unit"]);
-      const discountPct = round(num(l["Discount"]) / 100, 6);
+      const discountPct = round(discountFraction(l["Discount"]), 6);
       const taxRate = round(num(l["Tax rate"]) / 100, 6);
       const lineSubtotal = round(qty * unitPrice * (1 - discountPct), 4);
       const lineTax = round(lineSubtotal * taxRate, 4);
@@ -169,7 +178,7 @@ async function main() {
           `Katana ${katanaEx.toFixed(2)} / ${katanaInc.toFixed(2)}). Nothing after this quote was imported.`,
       );
     }
-    grandTotal += subtotal;
+    grandTotal += subtotal * (num(head["Conversion rate"]) || 1);
 
     // ---- header (replace any previous import of the same quote)
     const values = {
@@ -185,6 +194,7 @@ async function main() {
       ...shipTo,
       notes: text(lines.map((l) => text(l["Additional info"])).find(Boolean)),
       currency: text(head["Order currency"]) ?? entity.currency,
+      fxRate: String(num(head["Conversion rate"]) || 1),
       subtotal: subtotal.toFixed(4),
       tax: tax.toFixed(4),
       total: (subtotal + tax).toFixed(4),
@@ -217,7 +227,7 @@ async function main() {
     .from(salesOrders)
     .where(and(eq(salesOrders.entityId, entityId), inArray(salesOrders.number, quoteNumbers)));
   console.log(
-    `${entityId}: ${imported[0].n} quotes (${rows.length} lines, ${grandTotal.toLocaleString("en-NZ", { minimumFractionDigits: 2 })} ` +
+    `${entityId}: ${imported[0].n} quotes (${rows.length} lines, ${grandTotal.toLocaleString("en-NZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ` +
       `${entity.currency} ex tax, all totals match Katana), ${newCustomers} new customers, ` +
       `${unknownSkuLines} lines with SKUs not in the product list. Next SO number: SO-${seq.nextValue}.`,
   );

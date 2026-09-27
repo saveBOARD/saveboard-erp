@@ -231,6 +231,8 @@ export const salesOrders = pgTable(
     shipToCountry: text("ship_to_country"),
     notes: text("notes"),
     currency: text("currency").notNull(),
+    /** Entity currency per 1 unit of the order currency (1 unless e.g. a USD export order). */
+    fxRate: numeric("fx_rate", { precision: 14, scale: 6 }).notNull().default("1"),
     subtotal: money("subtotal").notNull().default("0"),
     tax: money("tax").notNull().default("0"),
     total: money("total").notNull().default("0"),

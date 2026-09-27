@@ -86,7 +86,10 @@ export default async function QuotePage(props: PageProps<"/sell/quotes/[id]">) {
           <Field label="Delivery deadline">{o.deliveryDeadline}</Field>
           <Field label="Bill to">{billTo}</Field>
           <Field label="Ship to">{shipTo}</Field>
-          <Field label="Currency">{o.currency}</Field>
+          <Field label="Currency">
+            {o.currency}
+            {o.currency !== entity.currency && ` (1 ${o.currency} = ${Number(o.fxRate)} ${entity.currency} · total ${money(Number(o.total) * Number(o.fxRate), entity.currency)})`}
+          </Field>
           <Field label="Source">{o.source === "katana" ? "Imported from Katana" : "saveBOARD ERP"}</Field>
         </div>
       </section>
