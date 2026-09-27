@@ -14,7 +14,9 @@
     "typecheck": "tsc --noEmit",
     "db:migrate:prod": "tsx scripts/migrate.ts --prod",
     "db:seed:prod": "tsx scripts/seed.ts --prod",
-    "db:import:prod": "tsx scripts/import-workbooks.ts --prod"
+    "db:import:prod": "tsx scripts/import-workbooks.ts --prod",
+    "db:import-quotes": "tsx scripts/import-katana-quotes.ts",
+    "db:import-quotes:prod": "tsx scripts/import-katana-quotes.ts --prod"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",

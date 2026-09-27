@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   bigserial,
   boolean,
+  date,
   index,
   integer,
   jsonb,
@@ -195,6 +196,75 @@ export const stockMovements = pgTable(
     index("stock_movements_entity_product").on(t.entityId, t.productId),
     index("stock_movements_batch").on(t.entityId, t.batchNo),
   ],
+);
+
+/**
+ * Quotes and sales orders are one table: a quote is an order in status "quote" and keeps its number
+ * when converted (Katana style).
+ */
+export const orderStatus = pgEnum("order_status", ["quote", "open", "picked", "shipped", "invoiced", "closed", "cancelled"]);
+export const quoteStatus = pgEnum("quote_status", ["draft", "sent", "accepted", "declined", "expired"]);
+
+export const salesOrders = pgTable(
+  "sales_orders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    entityId: text("entity_id").notNull().references(() => entities.id),
+    number: text("number").notNull(), // "SO-1586" (Katana imports may be "QSO-151")
+    title: text("title"), // Katana's text after the number, e.g. "Chris Tramix"
+    status: orderStatus("status").notNull(),
+    quoteStatus: quoteStatus("quote_status"),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id),
+    customerReference: text("customer_reference"),
+    orderDate: date("order_date").notNull(),
+    deliveryDeadline: date("delivery_deadline"),
+    quoteExpiresOn: date("quote_expires_on"),
+    shipToName: text("ship_to_name"),
+    shipToPhone: text("ship_to_phone"),
+    shipToLine1: text("ship_to_line1"),
+    shipToLine2: text("ship_to_line2"),
+    shipToCity: text("ship_to_city"),
+    shipToRegion: text("ship_to_region"),
+    shipToPostcode: text("ship_to_postcode"),
+    shipToCountry: text("ship_to_country"),
+    notes: text("notes"),
+    currency: text("currency").notNull(),
+    subtotal: money("subtotal").notNull().default("0"),
+    tax: money("tax").notNull().default("0"),
+    total: money("total").notNull().default("0"),
+    source: text("source").notNull().default("app"), // "app" | "katana"
+    createdBy: uuid("created_by").references(() => users.id),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("sales_orders_entity_number").on(t.entityId, t.number),
+    index("sales_orders_entity_status").on(t.entityId, t.status),
+    index("sales_orders_customer").on(t.customerId),
+  ],
+);
+
+export const orderLines = pgTable(
+  "order_lines",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => salesOrders.id, { onDelete: "cascade" }),
+    lineNo: integer("line_no").notNull(),
+    productId: uuid("product_id").references(() => products.id), // null for free-text lines (e.g. freight quotes)
+    sku: text("sku"),
+    description: text("description").notNull(),
+    qty: qty("qty").notNull(),
+    unitPrice: money("unit_price").notNull(),
+    discountPct: numeric("discount_pct", { precision: 7, scale: 4 }).notNull().default("0"), // 0.10 = 10%
+    taxRate: numeric("tax_rate", { precision: 5, scale: 4 }).notNull(), // 0.15 = 15%
+    lineSubtotal: money("line_subtotal").notNull(), // qty x price x (1 - discount), ex tax
+    lineTax: money("line_tax").notNull(),
+    ...timestamps,
+  },
+  (t) => [index("order_lines_order").on(t.orderId), index("order_lines_product").on(t.productId)],
 );
 
 export const auditLog = pgTable(

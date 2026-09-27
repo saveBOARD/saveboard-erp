@@ -19,6 +19,8 @@ server actions); the browser never queries tables directly.
 - Supabase `DATABASE_URL` must be the **Transaction pooler** (`aws-0-ap-southeast-2.pooler.supabase.com:6543`,
   user `postgres.<ref>`), not the IPv6-only direct host `db.<ref>.supabase.co`.
 - Local dev needs no accounts: without `DATABASE_URL` the app uses PGlite (embedded Postgres) in `.data/pglite`.
+  PGlite is single-process: **stop `npm run dev` before running any local `db:*` script**, or the running app
+  won't see (and may overwrite) the changes.
 - Lists use the shared `src/components/data-table.tsx` (filters, sort, totals, Excel export, column picker).
 
 ## Commands
