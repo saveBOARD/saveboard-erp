@@ -35,6 +35,7 @@ server actions); the browser never queries tables directly.
 - `npm run db:import-customers -- NZ "<katana_customers_edit.xlsx>"` previews filling customer gaps from a Katana
   customer export; add `--apply` to write. Customer imports only ever fill empty fields (app edits win).
 - Add `:prod` (e.g. `db:migrate:prod`) to run against Supabase using `.env.production.local`.
+- Switchover from Katana: `docs/switchover.md`; `scripts/switchover.ps1` (local rehearsal) / `-Target prod` (live).
 
 ## Business rules (do not break)
 - **Two entities, fully separate**: NZ = Upcycled Building Materials Ltd (NZD, 15% GST, location "New Zealand");
