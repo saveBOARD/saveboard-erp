@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useRef } from "react";
-import { BarChart3, Boxes, Building2, ChevronDown, Hammer, LogOut, MapPin, Package, ShoppingBasket, Store, Upload, UserCog } from "lucide-react";
+import { BarChart3, Boxes, Building2, ChevronDown, Hammer, Link2, LogOut, MapPin, Package, ShoppingBasket, Store, Upload, UserCog } from "lucide-react";
 import clsx from "clsx";
 import { SECTIONS } from "@/lib/nav";
 import { switchEntity } from "@/app/(app)/actions";
@@ -103,6 +103,9 @@ export function TopNav({
                 </Link>
                 <Link href="/settings/company" className="flex items-center gap-2 px-4 py-2 hover:bg-page">
                   <Building2 className="h-4 w-4" /> Company details
+                </Link>
+                <Link href="/settings/xero" className="flex items-center gap-2 px-4 py-2 hover:bg-page">
+                  <Link2 className="h-4 w-4" /> Xero
                 </Link>
                 <Link href="/settings/import-customers" className="flex items-center gap-2 px-4 py-2 hover:bg-page">
                   <Upload className="h-4 w-4" /> Import customers

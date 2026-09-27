@@ -102,6 +102,10 @@ export default async function DashboardPage() {
       .where(and(eq(t.salesReturns.entityId, entity.id), sql`${t.salesReturns.status} <> 'cancelled'`)),
     foreignHistory(entity.id, cur),
   ]);
+  const [overdueInvoices] = await db
+    .select({ n: sql<number>`count(*)::int`, value: sql<string>`coalesce(sum(${so.xeroAmountDue} * ${so.fxRate}), 0)` })
+    .from(so)
+    .where(and(eq(so.entityId, entity.id), eq(so.status, "invoiced"), sql`${so.xeroAmountDue} > 0`, lt(so.invoiceDueOn, today)));
 
   const status = (s: string, quote?: boolean) => {
     const r = statusRows.filter((x) => x.status === s && (!quote || ["draft", "sent"].includes(x.quoteStatus ?? "")));
@@ -128,6 +132,7 @@ export default async function DashboardPage() {
     { n: overdue[0]?.n ?? 0, text: "sales orders past their delivery deadline", href: "/sell/orders" },
     { n: shortOrders, text: "open orders with items not in stock", href: "/sell/orders" },
     { n: toInvoice.n, text: "shipped orders waiting to be invoiced", href: "/sell/invoicing" },
+    { n: overdueInvoices?.n ?? 0, text: `overdue invoices in Xero (${money0(Number(overdueInvoices?.value ?? 0))} owing)`, href: "/sell/invoicing?tab=invoiced" },
     { n: returnsWaiting[0]?.uncredited ?? 0, text: "returns without a credit note", href: "/sell/invoicing?tab=credits" },
     { n: returnsWaiting[0]?.open ?? 0, text: "returns waiting for the goods", href: "/sell/returns" },
     { n: lateMos[0]?.n ?? 0, text: "manufacturing orders past their production deadline", href: "/make/schedule" },

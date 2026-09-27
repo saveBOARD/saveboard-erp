@@ -10,6 +10,7 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Skip the login page, Next.js assets and public images (the logo shows on the login page before sign-in).
-  matcher: ["/((?!login|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|ico|webp)$).*)"],
+  // Skip the login page, Next.js assets, public images (the logo shows on the login page before sign-in) and the
+  // scheduled jobs under /api/cron (they check their own secret).
+  matcher: ["/((?!login|api/cron|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|ico|webp)$).*)"],
 };

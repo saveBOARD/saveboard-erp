@@ -6,6 +6,7 @@ import { db, t } from "@/db";
 import { getEntityContext } from "@/lib/dal";
 import { XERO_SETTINGS } from "@/lib/invoicing/xero";
 import { entityToday } from "@/lib/queries/stock-items";
+import { getConnection } from "@/lib/xero/client";
 
 export const metadata: Metadata = { title: "Invoicing · saveBOARD ERP" };
 
@@ -30,6 +31,9 @@ async function orderRows(entityId: string, entityCurrency: string, invoiced: boo
       dueOn: o.invoiceDueOn,
       subtotal: o.subtotal,
       currency: o.currency,
+      xeroInvoiceId: o.xeroInvoiceId,
+      xeroStatus: o.xeroStatus,
+      xeroAmountDue: o.xeroAmountDue,
       zeroRated: sql<boolean>`not exists (select 1 from order_lines l where l.order_id = ${o.id} and l.tax_rate > 0 and l.product_id is not null)`,
     })
     .from(o)
@@ -50,6 +54,9 @@ async function orderRows(entityId: string, entityCurrency: string, invoiced: boo
     total: Number(r.subtotal),
     currency: r.currency,
     export: r.zeroRated && r.currency !== entityCurrency,
+    inXero: !!r.xeroInvoiceId,
+    xeroStatus: r.xeroStatus,
+    amountDue: r.xeroAmountDue === null ? null : Number(r.xeroAmountDue),
   }));
 }
 
@@ -67,6 +74,8 @@ async function returnRows(entityId: string, credited: boolean): Promise<InvoiceR
       creditedOn: r.creditedOn,
       subtotal: r.subtotal,
       currency: r.currency,
+      xeroCreditNoteId: r.xeroCreditNoteId,
+      xeroStatus: r.xeroStatus,
     })
     .from(r)
     .innerJoin(t.salesOrders, eq(t.salesOrders.id, r.orderId))
@@ -87,6 +96,9 @@ async function returnRows(entityId: string, credited: boolean): Promise<InvoiceR
     total: Number(x.subtotal),
     currency: x.currency,
     export: false,
+    inXero: !!x.xeroCreditNoteId,
+    xeroStatus: x.xeroStatus,
+    amountDue: null,
   }));
 }
 
@@ -95,15 +107,26 @@ export default async function InvoicingPage(props: PageProps<"/sell/invoicing">)
   const { entity } = await getEntityContext();
   const sp = await props.searchParams;
   const mode = TABS.find((x) => x.value === sp.tab)?.value ?? "to_invoice";
-  const rows =
-    mode === "to_invoice" || mode === "invoiced" ? await orderRows(entity.id, entity.currency, mode === "invoiced") : await returnRows(entity.id, mode === "credited");
+  const [rows, conn] = await Promise.all([
+    mode === "to_invoice" || mode === "invoiced" ? orderRows(entity.id, entity.currency, mode === "invoiced") : returnRows(entity.id, mode === "credited"),
+    getConnection(entity.id),
+  ]);
   const x = XERO_SETTINGS[entity.id];
 
   return (
     <>
-      <ListHeader tabs={TABS.map((tab) => ({ label: tab.label, href: tab.value === "to_invoice" ? "/sell/invoicing" : `/sell/invoicing?tab=${tab.value}`, active: tab.value === mode }))} />
-      <InvoicingList mode={mode} today={entityToday(entity.id)} entityCurrency={entity.currency} rows={rows} />
-      <section className="mt-4 grid gap-1 rounded border border-line bg-surface p-4 text-sm">
+      <ListHeader
+        tabs={TABS.map((tab) => ({ label: tab.label, href: tab.value === "to_invoice" ? "/sell/invoicing" : `/sell/invoicing?tab=${tab.value}`, active: tab.value === mode }))}
+        note={conn ? `Connected to Xero: ${conn.tenantName}` : "Xero not connected — invoices go by import file (Settings → Xero)"}
+      />
+      <InvoicingList mode={mode} today={entityToday(entity.id)} entityCurrency={entity.currency} rows={rows} xeroOrg={conn?.tenantName ?? null} />
+      {conn && (
+        <p className="mt-3 text-sm text-muted">
+          Sending creates <b>draft</b> invoices and credit notes in {conn.tenantName}, numbered SO-… / RET-…, account {x.accountCode}; approve them in Xero. Payments are read
+          back every morning (or Settings → Xero → Refresh payments now); a paid invoice closes its order.
+        </p>
+      )}
+      <section className={conn ? "mt-4 hidden" : "mt-4 grid gap-1 rounded border border-line bg-surface p-4 text-sm"}>
         <h2 className="font-medium">Importing into Xero ({entity.id} organisation)</h2>
         <ol className="ml-5 list-decimal text-muted">
           <li>In Xero: Business → Invoices → Import.</li>

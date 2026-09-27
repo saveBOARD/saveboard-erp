@@ -8,6 +8,7 @@ import { DataTable, type Column } from "@/components/data-table";
 import { ORDER_STATUS } from "@/components/order-view";
 import { db, t } from "@/db";
 import { getEntityContext } from "@/lib/dal";
+import { entityToday } from "@/lib/queries/stock-items";
 
 export const metadata: Metadata = { title: "Customer · saveBOARD ERP" };
 
@@ -42,6 +43,8 @@ export default async function CustomerPage(props: PageProps<"/sell/customers/[id
         total: t.salesOrders.total,
         fxRate: t.salesOrders.fxRate,
         customerReference: t.salesOrders.customerReference,
+        xeroAmountDue: t.salesOrders.xeroAmountDue,
+        invoiceDueOn: t.salesOrders.invoiceDueOn,
       })
       .from(t.salesOrders)
       .where(eq(t.salesOrders.customerId, id))
@@ -54,8 +57,13 @@ export default async function CustomerPage(props: PageProps<"/sell/customers/[id
 
   const toEntity = (o: (typeof orders)[number]) => Number(o.total) * Number(o.fxRate);
   const openBalance = orders.filter((o) => ["open", "picked", "shipped"].includes(o.status)).reduce((s, o) => s + toEntity(o), 0);
+  // Unpaid invoices, as last read back from Xero (only for invoices sent through the live connection).
+  const today = entityToday(entity.id);
+  const unpaid = orders.filter((o) => o.status === "invoiced" && Number(o.xeroAmountDue ?? 0) > 0);
+  const owing = unpaid.reduce((s, o) => s + Number(o.xeroAmountDue) * Number(o.fxRate), 0);
+  const overdue = unpaid.filter((o) => o.invoiceDueOn && o.invoiceDueOn < today).reduce((s, o) => s + Number(o.xeroAmountDue) * Number(o.fxRate), 0);
   const limit = c.creditLimit === null ? null : Number(c.creditLimit);
-  const overLimit = limit !== null && limit > 0 && openBalance > limit;
+  const overLimit = limit !== null && limit > 0 && openBalance + owing > limit;
   const openQuotes = orders.filter((o) => o.status === "quote" && ["draft", "sent"].includes(o.quoteStatus ?? "")).length;
 
   const columns: Column[] = [
@@ -99,7 +107,7 @@ export default async function CustomerPage(props: PageProps<"/sell/customers/[id
         )}
         {overLimit && (
           <p className="flex items-center gap-2 rounded border border-warn/40 bg-[#fff6e0] px-4 py-2 text-sm">
-            <TriangleAlert className="h-4 w-4 text-warn" /> Open orders ({money(openBalance, entity.currency)}) are over the credit limit of{" "}
+            <TriangleAlert className="h-4 w-4 text-warn" /> Open orders and unpaid invoices ({money(openBalance + owing, entity.currency)}) are over the credit limit of{" "}
             {money(limit!, entity.currency)}.
           </p>
         )}
@@ -122,6 +130,14 @@ export default async function CustomerPage(props: PageProps<"/sell/customers/[id
           </Item>
           <Item label="Credit limit">{limit !== null ? money(limit, entity.currency) : null}</Item>
           <Item label="Open orders (not yet invoiced)">{money(openBalance, entity.currency)}</Item>
+          <Item label="Owing in Xero">
+            {owing > 0 ? (
+              <>
+                {money(owing, entity.currency)}
+                {overdue > 0 && <span className="ml-1 text-bad">({money(overdue, entity.currency)} overdue)</span>}
+              </>
+            ) : null}
+          </Item>
           <Item label="Open quotes">{String(openQuotes)}</Item>
         </div>
         {c.notes && <p className="whitespace-pre-wrap rounded bg-page px-4 py-2 text-sm">{c.notes}</p>}

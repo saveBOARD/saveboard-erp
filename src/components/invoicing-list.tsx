@@ -1,18 +1,31 @@
 "use client";
 
-import { Download, FileSpreadsheet, Undo2 } from "lucide-react";
+import { Download, FileSpreadsheet, Send, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import {
   creditAndExport,
+  creditAndSend,
   exportAgain,
   exportCreditsAgain,
   invoiceAndExport,
+  invoiceAndSend,
+  sendCreditsToXero,
+  sendToXero,
   undoCredited,
   undoInvoiced,
   type CsvResult,
 } from "@/app/(app)/sell/invoicing/actions";
+
+const XERO_LABEL: Record<string, string> = {
+  DRAFT: "Draft",
+  SUBMITTED: "Awaiting approval",
+  AUTHORISED: "Awaiting payment",
+  PAID: "Paid",
+  VOIDED: "Voided",
+  DELETED: "Deleted",
+};
 
 export type InvoicingMode = "to_invoice" | "invoiced" | "credits" | "credited";
 
@@ -29,6 +42,9 @@ export type InvoiceRow = {
   total: number;
   currency: string;
   export: boolean;
+  inXero: boolean;
+  xeroStatus: string | null;
+  amountDue: number | null;
 };
 
 const money = (n: number, c: string) => `${n.toLocaleString("en-NZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${c}`;
@@ -49,7 +65,20 @@ function download({ csv, filename }: CsvResult) {
   URL.revokeObjectURL(url);
 }
 
-export function InvoicingList({ mode, rows, today, entityCurrency }: { mode: InvoicingMode; rows: InvoiceRow[]; today: string; entityCurrency: string }) {
+export function InvoicingList({
+  mode,
+  rows,
+  today,
+  entityCurrency,
+  xeroOrg,
+}: {
+  mode: InvoicingMode;
+  rows: InvoiceRow[];
+  today: string;
+  entityCurrency: string;
+  /** Name of the connected Xero organisation; null = not connected (file download only). */
+  xeroOrg: string | null;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -74,17 +103,25 @@ export function InvoicingList({ mode, rows, today, entityCurrency }: { mode: Inv
     setDone(null);
     startTransition(async () => {
       const res = await action();
-      if (res.error) return setError(res.error);
+      if (res.error) {
+        setError(res.error);
+        return router.refresh(); // part may have succeeded (e.g. marked invoiced, one send failed)
+      }
       if (res.csv) download(res);
-      if (message) setDone(message);
+      if (message || res.message) setDone([res.message, message].filter(Boolean).join(" "));
       setSelected(new Set());
       router.refresh();
     });
   }
 
-  function issue() {
+  function issue(viaFile = false) {
     const n = selected.size;
     const ids = [...selected];
+    if (xeroOrg && !viaFile) {
+      if (credit) run(() => creditAndSend({ returnIds: ids, creditDate: docDate }));
+      else run(() => invoiceAndSend({ orderIds: ids, invoiceDate: docDate }));
+      return;
+    }
     if (credit)
       run(() => creditAndExport({ returnIds: ids, creditDate: docDate }), `${n} credit note${n === 1 ? "" : "s"} marked credited. Import the downloaded file into Xero (see below).`);
     else run(() => invoiceAndExport({ orderIds: ids, invoiceDate: docDate }), `${n} order${n === 1 ? "" : "s"} marked Invoiced. Import the downloaded file into Xero (see below).`);
@@ -99,19 +136,43 @@ export function InvoicingList({ mode, rows, today, entityCurrency }: { mode: Inv
               {credit ? "Credit note date" : "Invoice date"}
               <input type="date" value={docDate} onChange={(e) => setDocDate(e.target.value)} className="input" />
             </label>
-            <button type="button" disabled={pending || !selected.size} className="btn-primary" onClick={issue}>
-              <FileSpreadsheet className="h-4 w-4" /> {credit ? "Credit" : "Invoice"} {selected.size || ""} & download Xero file
-            </button>
+            {xeroOrg ? (
+              <>
+                <button type="button" disabled={pending || !selected.size} className="btn-primary" onClick={() => issue()} title={`Creates draft ${credit ? "credit notes" : "invoices"} in ${xeroOrg}`}>
+                  <Send className="h-4 w-4" /> {credit ? "Credit" : "Invoice"} {selected.size || ""} & send to Xero
+                </button>
+                <button type="button" disabled={pending || !selected.size} className="btn-secondary px-2 text-xs" onClick={() => issue(true)} title="Mark them and download an import file instead">
+                  or download a file
+                </button>
+              </>
+            ) : (
+              <button type="button" disabled={pending || !selected.size} className="btn-primary" onClick={() => issue()}>
+                <FileSpreadsheet className="h-4 w-4" /> {credit ? "Credit" : "Invoice"} {selected.size || ""} & download Xero file
+              </button>
+            )}
           </>
         ) : (
-          <button
-            type="button"
-            disabled={pending || !selected.size}
-            className="btn-secondary"
-            onClick={() => run(() => (credit ? exportCreditsAgain([...selected]) : exportAgain([...selected])))}
-          >
-            <Download className="h-4 w-4" /> Download Xero file again ({selected.size})
-          </button>
+          <>
+            {xeroOrg && (
+              <button
+                type="button"
+                disabled={pending || !rows.some((r) => selected.has(r.id) && !r.inXero)}
+                className="btn-primary"
+                title="Send the ticked ones that aren't in Xero yet"
+                onClick={() => run(() => (credit ? sendCreditsToXero([...selected]) : sendToXero([...selected])))}
+              >
+                <Send className="h-4 w-4" /> Send to Xero ({rows.filter((r) => selected.has(r.id) && !r.inXero).length})
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={pending || !selected.size}
+              className="btn-secondary"
+              onClick={() => run(() => (credit ? exportCreditsAgain([...selected]) : exportAgain([...selected])))}
+            >
+              <Download className="h-4 w-4" /> Download Xero file ({selected.size})
+            </button>
+          </>
         )}
         <span className="ml-auto text-sm text-muted">
           {selected.size
@@ -137,6 +198,8 @@ export function InvoicingList({ mode, rows, today, entityCurrency }: { mode: Inv
               {m.date && <th className="border-b border-line px-3 py-2 font-normal">{m.date}</th>}
               {mode === "invoiced" && <th className="border-b border-line px-3 py-2 font-normal">Due</th>}
               <th className="border-b border-line px-3 py-2 text-right font-normal">{credit ? "Credit ex GST" : "Total ex GST"}</th>
+              {!m.pending && <th className="border-b border-line px-3 py-2 font-normal">Xero</th>}
+              {!m.pending && !credit && <th className="border-b border-line px-3 py-2 text-right font-normal">Owing (incl. GST)</th>}
               {!m.pending && <th className="w-10 border-b border-line" />}
             </tr>
           </thead>
@@ -162,6 +225,20 @@ export function InvoicingList({ mode, rows, today, entityCurrency }: { mode: Inv
                   {money(r.total, r.currency)}
                   {r.currency !== entityCurrency && <span className="text-xs text-muted"> (foreign)</span>}
                 </td>
+                {!m.pending && (
+                  <td className="border-b border-line px-3 py-2 whitespace-nowrap">
+                    {r.inXero ? (
+                      <span className={r.xeroStatus === "PAID" ? "text-ok" : r.xeroStatus === "VOIDED" || r.xeroStatus === "DELETED" ? "text-bad" : ""}>
+                        {XERO_LABEL[r.xeroStatus ?? ""] ?? r.xeroStatus ?? "In Xero"}
+                      </span>
+                    ) : (
+                      <span className="text-muted">{xeroOrg ? "Not sent" : "File"}</span>
+                    )}
+                  </td>
+                )}
+                {!m.pending && !credit && (
+                  <td className="border-b border-line px-3 py-2 text-right tabular-nums whitespace-nowrap">{r.amountDue === null ? "" : money(r.amountDue, r.currency)}</td>
+                )}
                 {!m.pending && (
                   <td className="border-b border-line px-1">
                     <button

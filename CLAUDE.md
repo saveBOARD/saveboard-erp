@@ -58,6 +58,12 @@ server actions); the browser never queries tables directly.
 - Credit limit / credit hold is checked when an order is confirmed.
 - Xero: one-way push (contacts, invoices, credit notes) to the entity's own Xero org; payment status reads back.
 - Every list screen exports to Excel.
+- Xero (src/lib/xero/): standard OAuth web app on Xero's free Starter tier (≤5 orgs), granular scopes (app created after
+  2 Mar 2026). One connection per entity (Settings → Xero, admin), tokens AES-GCM encrypted with a key derived from
+  SESSION_SECRET. Invoices / credit notes are pushed as DRAFTs numbered SO-… / RET-…; an existing Xero document with
+  that number is linked, never duplicated. Daily Vercel cron `/api/cron/xero` (CRON_SECRET) reads back status and
+  payments; a PAID invoice closes its order. Env: XERO_CLIENT_ID, XERO_CLIENT_SECRET, CRON_SECRET. The CSV import
+  file stays as a fallback.
 
 ## Users & UI
 - Sign-in with **username + password** (admin creates users; no self sign-up). Desktop-first; picking, goods

@@ -283,6 +283,12 @@ export const salesOrders = pgTable(
     /** Set when the order is marked Invoiced (invoice date and due date sent to Xero). */
     invoicedOn: date("invoiced_on"),
     invoiceDueOn: date("invoice_due_on"),
+    /** Xero invoice created through the live connection, and its status/payment as last read back. */
+    xeroInvoiceId: text("xero_invoice_id"),
+    xeroStatus: text("xero_status"), // DRAFT | SUBMITTED | AUTHORISED | PAID | VOIDED | DELETED
+    xeroAmountDue: money("xero_amount_due"),
+    xeroAmountPaid: money("xero_amount_paid"),
+    xeroSyncedAt: timestamp("xero_synced_at", { withTimezone: true }),
     source: text("source").notNull().default("app"), // "app" | "katana"
     createdBy: uuid("created_by").references(() => users.id),
     ...timestamps,
@@ -417,6 +423,9 @@ export const salesReturns = pgTable(
     tax: money("tax").notNull().default("0"),
     total: money("total").notNull().default("0"),
     creditedOn: date("credited_on"), // set when the credit note is exported to Xero
+    xeroCreditNoteId: text("xero_credit_note_id"),
+    xeroStatus: text("xero_status"),
+    xeroSyncedAt: timestamp("xero_synced_at", { withTimezone: true }),
     createdBy: uuid("created_by").references(() => users.id),
     receivedBy: uuid("received_by").references(() => users.id),
     ...timestamps,
@@ -716,6 +725,45 @@ export const moOperations = pgTable(
     sortOrder: integer("sort_order").notNull().default(0),
   },
   (t) => [index("mo_operations_mo").on(t.moId)],
+);
+
+/**
+ * The live Xero link for an entity (one Xero organisation each). Tokens are encrypted (src/lib/xero/crypto.ts);
+ * the refresh token rotates on every refresh and lasts 60 days unused.
+ */
+export const xeroConnections = pgTable("xero_connections", {
+  entityId: text("entity_id")
+    .primaryKey()
+    .references(() => entities.id),
+  tenantId: text("tenant_id").notNull(),
+  tenantName: text("tenant_name").notNull(),
+  connectionId: text("connection_id").notNull(),
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  scopes: text("scopes"),
+  connectedBy: uuid("connected_by").references(() => users.id),
+  connectedAt: timestamp("connected_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** What was sent to / read from Xero, and any error Xero returned. */
+export const xeroSyncLog = pgTable(
+  "xero_sync_log",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    entityId: text("entity_id")
+      .notNull()
+      .references(() => entities.id),
+    kind: text("kind").notNull(), // invoice | credit_note | contact | refresh | connect
+    recordId: text("record_id"),
+    docNumber: text("doc_number"),
+    ok: boolean("ok").notNull(),
+    message: text("message"),
+    userId: uuid("user_id").references(() => users.id),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("xero_sync_log_entity_at").on(t.entityId, t.at)],
 );
 
 export const auditLog = pgTable(
