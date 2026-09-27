@@ -14,6 +14,8 @@ function Run([string[]]$cmd) {
 Run @("tsx", "scripts/migrate.ts")
 Run @("tsx", "scripts/seed.ts")
 Run @("tsx", "scripts/import-workbooks.ts")
+# Katana customer details (contacts, emails, addresses, delivery sites) — before the order imports so they match names
+Run @("tsx", "scripts/import-katana-customers.ts", "NZ", "../NZ katana_customers_edit_2026-09-27.xlsx", "--apply")
 # Manually corrected AUS costs (27/9/26) — set before the inventory import so it keeps them
 foreach ($c in @(@("SPRS", "1.05"), @("SBEXPMULTI129002400GRNPAP", "35"), @("SBEXPMULTI129952400DWHTPAP", "47"), @("SBEXP1012002400BLKPAP", "55"),
                  @("SBEXP1012003000BLKPAP", "35"), @("Nine Dragon Testliner - KP BF3.5", "0.9"), @("SBEXPMULTI1212002400CLRBLK", "23.91"), @("SB_R&D BOARD", "50"))) {

@@ -32,6 +32,8 @@ server actions); the browser never queries tables directly.
 - `npm run dev` · `npm run typecheck` · `npm run lint` · `npm run build`
 - `npm run db:generate` (after editing schema.ts) → `npm run db:migrate`
 - `npm run db:seed` (entities + first admin from .env.local) · `npm run db:import` (both Excel workbooks)
+- `npm run db:import-customers -- NZ "<katana_customers_edit.xlsx>"` previews filling customer gaps from a Katana
+  customer export; add `--apply` to write. Customer imports only ever fill empty fields (app edits win).
 - Add `:prod` (e.g. `db:migrate:prod`) to run against Supabase using `.env.production.local`.
 
 ## Business rules (do not break)

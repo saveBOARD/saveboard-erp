@@ -21,6 +21,8 @@
     "db:import-katana:prod": "tsx scripts/import-katana-sales.ts --prod",
     "db:import-inventory": "tsx scripts/import-katana-inventory.ts",
     "db:import-inventory:prod": "tsx scripts/import-katana-inventory.ts --prod",
+    "db:import-customers": "tsx scripts/import-katana-customers.ts",
+    "db:import-customers:prod": "tsx scripts/import-katana-customers.ts --prod",
     "db:remove-empty-product": "tsx scripts/remove-empty-product.ts",
     "db:set-cost": "tsx scripts/set-cost.ts",
     "db:rebuild-local": "powershell -ExecutionPolicy Bypass -File scripts/rebuild-local.ps1"
