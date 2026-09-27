@@ -15,10 +15,10 @@
     "db:migrate:prod": "tsx scripts/migrate.ts --prod",
     "db:seed:prod": "tsx scripts/seed.ts --prod",
     "db:import:prod": "tsx scripts/import-workbooks.ts --prod",
-    "db:import-quotes": "tsx scripts/import-katana-quotes.ts",
-    "db:import-quotes:prod": "tsx scripts/import-katana-quotes.ts --prod",
     "db:expire-quotes": "tsx scripts/expire-quotes.ts",
-    "db:expire-quotes:prod": "tsx scripts/expire-quotes.ts --prod"
+    "db:expire-quotes:prod": "tsx scripts/expire-quotes.ts --prod",
+    "db:import-katana": "tsx scripts/import-katana-sales.ts",
+    "db:import-katana:prod": "tsx scripts/import-katana-sales.ts --prod"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",

@@ -1,14 +1,17 @@
 /**
- * Imports open quotes from a Katana "SalesOrders" export (Sell > Quotes > download) into sales_orders
- * with status "quote". Re-runnable: quotes are matched on (entity, number) and replaced.
+ * Imports quotes and open sales orders from a Katana "SalesOrders" export (Sell > Quotes or
+ * Sell > Sales orders > Open > download) into sales_orders. Re-runnable: matched on (entity, number) and replaced,
+ * except that a status changed in the app (expired, accepted, shipped…) is kept.
  *
- *   npm run db:import-quotes -- AUS "../AUS SalesOrders-2026-09-27-16_03.xlsx"
- *   npm run db:import-quotes:prod -- NZ "../NZ Quotes-....xlsx"
+ *   npm run db:import-katana -- AUS "../AUS SalesOrders-2026-09-27-16_03.xlsx"
+ *   npm run db:import-katana:prod -- NZ "../NZ OpenSalesOrders-2026-09-27-16_29.xlsx"
  *
- * - Customers not yet in the customer list are created from the quote (name + delivery address).
+ * Katana shipping status -> our status:  Pending = quote (sent) · Not shipped = open · Packed = picked.
+ * - Customers not yet in the customer list are created from the order (name + delivery address).
  * - Lines whose SKU isn't a known product keep their SKU text and description (product link left empty).
- * - Every quote's total is checked against Katana's own line totals; any mismatch stops the import.
+ * - Every order's total is checked against Katana's own line totals; any mismatch stops the import.
  * - The SO number sequence is moved past the highest imported number (quotes and orders share it).
+ * - No stock moves: open orders only commit stock; it leaves when they are shipped in the app.
  */
 import "./env";
 import ExcelJS from "exceljs";
@@ -18,7 +21,7 @@ import { customers, entities, numberSequences, orderLines, products, salesOrders
 
 const [entityId, file] = process.argv.slice(2).filter((a) => a !== "--prod");
 if (!entityId || !file) {
-  console.error('Usage: npm run db:import-quotes -- <NZ|AUS> "<path to Katana export.xlsx>"');
+  console.error('Usage: npm run db:import-katana -- <NZ|AUS> "<path to Katana export.xlsx>"');
   process.exit(1);
 }
 
@@ -99,6 +102,7 @@ async function main() {
   let maxNumber = 0;
   let grandTotal = 0;
   const quoteNumbers: string[] = [];
+  const statusCounts: Record<string, number> = {};
 
   for (const [rawNumber, lines] of byQuote) {
     const head = lines[0];
@@ -132,7 +136,7 @@ async function main() {
           billingRegion: shipTo.shipToRegion,
           billingPostcode: shipTo.shipToPostcode,
           billingCountry: shipTo.shipToCountry,
-          notes: `Created from Katana quote ${number} during import`,
+          notes: `Created from Katana order ${number} during import`,
         })
         .returning({ id: customers.id });
       customerId = c.id;
@@ -180,13 +184,22 @@ async function main() {
     }
     grandTotal += subtotal * (num(head["Conversion rate"]) || 1);
 
-    // ---- header (replace any previous import of the same quote)
+    // ---- header (replace any previous import of the same order)
+    const katanaStatus = lines.map((l) => text(l["Shipping status"])).filter(Boolean) as string[];
+    const status = katanaStatus.every((s) => s === "Pending")
+      ? ("quote" as const)
+      : katanaStatus.length && katanaStatus.every((s) => s === "Packed")
+        ? ("picked" as const)
+        : katanaStatus.some((s) => s === "Delivered") && katanaStatus.every((s) => s === "Delivered")
+          ? ("shipped" as const)
+          : ("open" as const);
+    statusCounts[status] = (statusCounts[status] ?? 0) + 1;
     const values = {
       entityId,
       number,
       title,
-      status: "quote" as const,
-      quoteStatus: "sent" as const, // Katana "Pending"
+      status,
+      quoteStatus: status === "quote" ? ("sent" as const) : ("accepted" as const),
       customerId,
       customerReference: text(head["Customer ref"]),
       orderDate: isoDate(head["Created date"]) ?? new Date().toISOString().slice(0, 10),
@@ -203,10 +216,16 @@ async function main() {
     const [order] = await db
       .insert(salesOrders)
       .values(values)
-      // on re-import, keep any status decided in the app (e.g. a quote marked expired or accepted)
+      // On re-import keep any status decided in the app (a quote marked expired, an order shipped…),
+      // except that a quote Katana has since turned into an order moves forward to that order status.
       .onConflictDoUpdate({
         target: [salesOrders.entityId, salesOrders.number],
-        set: { ...values, status: sql`${salesOrders.status}`, quoteStatus: sql`${salesOrders.quoteStatus}`, updatedAt: new Date() },
+        set: {
+          ...values,
+          status: sql`case when ${salesOrders.status} = 'quote' and excluded.status <> 'quote' then excluded.status else ${salesOrders.status} end`,
+          quoteStatus: sql`case when ${salesOrders.status} = 'quote' and excluded.status <> 'quote' then 'accepted'::quote_status else ${salesOrders.quoteStatus} end`,
+          updatedAt: new Date(),
+        },
       })
       .returning({ id: salesOrders.id });
     await db.delete(orderLines).where(eq(orderLines.orderId, order.id));
@@ -231,7 +250,7 @@ async function main() {
     .from(salesOrders)
     .where(and(eq(salesOrders.entityId, entityId), inArray(salesOrders.number, quoteNumbers)));
   console.log(
-    `${entityId}: ${imported[0].n} quotes (${rows.length} lines, ${grandTotal.toLocaleString("en-NZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ` +
+    `${entityId}: ${imported[0].n} orders [${Object.entries(statusCounts).map(([s, n]) => `${n} ${s}`).join(", ")}] (${rows.length} lines, ${grandTotal.toLocaleString("en-NZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ` +
       `${entity.currency} ex tax, all totals match Katana), ${newCustomers} new customers, ` +
       `${unknownSkuLines} lines with SKUs not in the product list. Next SO number: SO-${seq.nextValue}.`,
   );

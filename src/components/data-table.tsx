@@ -257,7 +257,7 @@ export function DataTable({
             {visible.some((c) => c.total) && (
               <tr className="bg-[#eef3f8] font-bold">
                 {visible.map((c, i) => (
-                  <td key={c.key} className={clsx("border-b border-line px-3 py-2", (c.kind === "money" || c.kind === "number") && "text-right tabular-nums")}>
+                  <td key={c.key} className={clsx("border-b border-line px-3 py-2 whitespace-nowrap", (c.kind === "money" || c.kind === "number") && "text-right tabular-nums")}>
                     {c.total ? display(c, totals[c.key], currency, {}) : i === 0 ? "Total:" : ""}
                   </td>
                 ))}
