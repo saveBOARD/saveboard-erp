@@ -203,7 +203,11 @@ async function main() {
     const [order] = await db
       .insert(salesOrders)
       .values(values)
-      .onConflictDoUpdate({ target: [salesOrders.entityId, salesOrders.number], set: { ...values, updatedAt: new Date() } })
+      // on re-import, keep any status decided in the app (e.g. a quote marked expired or accepted)
+      .onConflictDoUpdate({
+        target: [salesOrders.entityId, salesOrders.number],
+        set: { ...values, status: sql`${salesOrders.status}`, quoteStatus: sql`${salesOrders.quoteStatus}`, updatedAt: new Date() },
+      })
       .returning({ id: salesOrders.id });
     await db.delete(orderLines).where(eq(orderLines.orderId, order.id));
     await db.insert(orderLines).values(lineValues.map((l) => ({ ...l, orderId: order.id })));
