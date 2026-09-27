@@ -1,0 +1,45 @@
+@AGENTS.md
+
+# saveBOARD ERP
+
+Web ERP replacing Katana MRP (and the interim Excel workbooks) for saveBOARD. Owner: Paul Charteris.
+Plan: https://claude.ai/artifact/PajkmQrsqUGB1LWHsidWKn · Specs: `../saveBOARD_ERP_Requirements_Synthesis_2.docx`,
+`../saveBOARD_NZ_ERP_MVP.xlsx`, `../saveBOARD_AUS_ERP_MVP_3.xlsx` (the workbooks are the functional spec and the import source).
+Katana UI screenshots (look-and-feel reference) are the `../*Screen.png` files.
+
+## Stack
+Next.js (App Router, TypeScript) on Vercel · Postgres + Auth + Storage on Supabase (Sydney) · code on GitHub.
+All database access is server-side (server components / server actions); the browser never queries tables directly.
+
+## Business rules (do not break)
+- **Two entities, fully separate**: NZ = Upcycled Building Materials Ltd (NZD, 15% GST, location "New Zealand");
+  AUS = Upcycled Building Materials Australian Pty Ltd (AUD, 10% GST, location "saveBOARD NSW").
+  Every business table has `entity_id`; every query filters by the user's current entity. Customers, SKUs, stock,
+  number sequences and Xero orgs never cross entities.
+- **Numbering**: a quote *is* a sales order in `quote` status and keeps its number when converted (Katana style).
+  Per-entity sequences continue from Katana (NZ last used SO-1585). PO-, MO-, SA-, STK- sequences per entity.
+- **Stock is a ledger**: every change is a row in `stock_movements`. On hand = sum of movements.
+  Committed = confirmed, unshipped order lines. Expected = open PO lines + planned MO output. ATP = on hand − committed.
+  Never store a mutable "stock on hand" number as the source of truth.
+- Completing an MO consumes its materials AND adds finished goods. Receiving a PO adds stock. Items with
+  Track Stock = No (freight, Hiab, picking fee, …) never create movements or SHORT/REORDER flags.
+- Batch numbers are recorded on MO output and on shipment lines (traceability).
+- **Cost and margin never appear** on picking slips, packing slips or work orders.
+- One sales order = one invoice (no split/progress invoicing). Invoicing is manual, not automatic on Shipped.
+- Sales order status: Open → Picked → Shipped → Invoiced → Closed; partial shipments allowed; orders editable after
+  confirmation with an audit trail. Stock shortfalls are flagged for a person — never auto-create POs/MOs.
+- Credit limit / credit hold is checked when an order is confirmed.
+- Xero: one-way push (contacts, invoices, credit notes) to the entity's own Xero org; payment status reads back.
+- Every list screen exports to Excel.
+
+## Users & UI
+- Sign-in with **username + password** (admin creates users; no self sign-up). Desktop-first; picking, goods
+  receipt and stocktake screens must also work on a tablet.
+- Mirror Katana's look: dark top nav (Sell · Make · Buy · Stock · Items · Insights), sub-tabs, Open/Done status
+  tabs, a filter on every column, a Total row, coloured status cells (red = not available, green = in stock/done,
+  grey dropdowns = not invoiced/not shipped), entity switcher top-right, blue "+ New" button.
+
+## Working agreements
+- Paul is the product owner, not a developer: explain changes in plain language, keep decisions visible.
+- One phase at a time; each ends with Paul testing on real data. New ideas go to `docs/backlog.md`.
+- Never commit secrets; `.env*` files stay out of git.
