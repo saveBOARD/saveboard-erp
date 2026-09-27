@@ -2,9 +2,7 @@
  * Creates the two entities and the first admin user. Safe to re-run (existing rows are left alone,
  * except the admin password, which is only set when the user is first created).
  */
-import { config } from "dotenv";
-config({ path: ".env.local" });
-config();
+import "./env";
 import bcrypt from "bcryptjs";
 import { createDb } from "../src/db/client";
 import { entities, userEntities, users } from "../src/db/schema";

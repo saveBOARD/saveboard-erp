@@ -11,7 +11,10 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
     "db:import": "tsx scripts/import-workbooks.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:migrate:prod": "tsx scripts/migrate.ts --prod",
+    "db:seed:prod": "tsx scripts/seed.ts --prod",
+    "db:import:prod": "tsx scripts/import-workbooks.ts --prod"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",

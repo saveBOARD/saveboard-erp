@@ -1,6 +1,4 @@
-import "dotenv/config";
-import { config } from "dotenv";
-config({ path: ".env.local" });
+import "./env";
 
 async function main() {
   const url = process.env.DATABASE_URL;

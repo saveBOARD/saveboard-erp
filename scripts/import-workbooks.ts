@@ -5,14 +5,13 @@
  *
  *   npm run db:import                     # uses ../saveBOARD_NZ_ERP_MVP.xlsx and ../saveBOARD_AUS_ERP_MVP_3.xlsx
  *   npm run db:import -- NZ=path AUS=path # other files
+ *   npm run db:import:prod                # into Supabase (reads .env.production.local)
  */
-import { config } from "dotenv";
-config({ path: ".env.local" });
-config();
+import "./env";
 import ExcelJS from "exceljs";
 import { and, eq, sql } from "drizzle-orm";
 import { createDb, type Db } from "../src/db/client";
-import { customerSites, customers, entities, numberSequences, products, stockMovements, suppliers } from "../src/db/schema";
+import { customers, entities, numberSequences, products, stockMovements, suppliers } from "../src/db/schema";
 
 const FILES: Record<string, string> = {
   NZ: "../saveBOARD_NZ_ERP_MVP.xlsx",
@@ -209,7 +208,7 @@ async function importEntity(db: Db, entityId: string, file: string) {
   if (productRows.length)
     await db
       .insert(products)
-      .values(productRows.map(({ opening: _opening, ...p }) => p))
+      .values(productRows.map(({ opening, ...p }) => (void opening, p)))
       .onConflictDoUpdate({
         target: [products.entityId, products.sku],
         set: {

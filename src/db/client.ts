@@ -17,6 +17,7 @@ export function createDb(): Db {
     // prepare:false is required by Supabase's transaction-mode connection pooler.
     return drizzlePostgres(postgres(url, { prepare: false, max: 5 }), { schema });
   }
+  if (process.env.VERCEL) throw new Error("DATABASE_URL is not set for this Vercel environment.");
   mkdirSync("./.data", { recursive: true });
   return drizzlePglite(new PGlite("./.data/pglite"), { schema }) as unknown as Db;
 }

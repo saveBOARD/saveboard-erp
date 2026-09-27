@@ -1,26 +1,72 @@
 @import "tailwindcss";
 
+/* Katana-inspired palette: dark navy bar, blue actions, red/green status cells. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --nav: #0d2233;
+  --nav-hover: #1b3a52;
+  --nav-ink: #e8eef3;
+  --page: #f1f2f3;
+  --surface: #ffffff;
+  --ink: #1d2733;
+  --muted: #5f6b77;
+  --line: #d9dee3;
+  --primary: #0b4ea2;
+  --primary-hover: #093f84;
+  --link: #1557b0;
+  --brand: #5fbf7f;
+  --ok: #2e8b4f;
+  --bad: #d7341f;
+  --bad-soft: #fde8e5;
+  --pending: #e3e6e9;
+  --warn: #b26b00;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-nav: var(--nav);
+  --color-nav-hover: var(--nav-hover);
+  --color-nav-ink: var(--nav-ink);
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-primary: var(--primary);
+  --color-link: var(--link);
+  --color-brand: var(--brand);
+  --color-ok: var(--ok);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --color-pending: var(--pending);
+  --color-warn: var(--warn);
+  --font-sans: var(--font-roboto), "Segoe UI", Arial, sans-serif;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+@layer components {
+  .input {
+    @apply rounded border border-line bg-surface px-3 py-1.5 text-sm text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/20;
+  }
+  .btn-primary {
+    @apply inline-flex items-center gap-1.5 rounded bg-primary px-4 py-1.5 text-sm font-medium text-white hover:bg-[var(--primary-hover)] disabled:opacity-60;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center gap-1.5 rounded border border-line bg-surface px-3 py-1.5 text-sm text-ink shadow-sm hover:bg-page disabled:opacity-60;
+  }
+  .icon-btn {
+    @apply inline-flex h-8 w-8 items-center justify-center rounded text-primary hover:bg-page disabled:text-muted disabled:opacity-50;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
 }

@@ -8,8 +8,20 @@ Plan: https://claude.ai/artifact/PajkmQrsqUGB1LWHsidWKn · Specs: `../saveBOARD_
 Katana UI screenshots (look-and-feel reference) are the `../*Screen.png` files.
 
 ## Stack
-Next.js (App Router, TypeScript) on Vercel · Postgres + Auth + Storage on Supabase (Sydney) · code on GitHub.
-All database access is server-side (server components / server actions); the browser never queries tables directly.
+Next.js 16 (App Router, TypeScript, Tailwind v4) on Vercel · Postgres (+ Storage later) on Supabase (Sydney) · code on GitHub.
+Drizzle ORM (`src/db/schema.ts`); migrations in `drizzle/`. All database access is server-side (server components /
+server actions); the browser never queries tables directly.
+- **Auth is our own** (not Supabase Auth), so the app stays portable to any host: bcrypt password hashes in `users`,
+  signed JWT session cookie (`src/lib/session.ts`), checks in `src/lib/dal.ts` (`requireUser`, `getEntityContext`,
+  `assertEntityAccess`). `src/proxy.ts` only does the optimistic redirect to /login.
+- Local dev needs no accounts: without `DATABASE_URL` the app uses PGlite (embedded Postgres) in `.data/pglite`.
+- Lists use the shared `src/components/data-table.tsx` (filters, sort, totals, Excel export, column picker).
+
+## Commands
+- `npm run dev` · `npm run typecheck` · `npm run lint` · `npm run build`
+- `npm run db:generate` (after editing schema.ts) → `npm run db:migrate`
+- `npm run db:seed` (entities + first admin from .env.local) · `npm run db:import` (both Excel workbooks)
+- Add `:prod` (e.g. `db:migrate:prod`) to run against Supabase using `.env.production.local`.
 
 ## Business rules (do not break)
 - **Two entities, fully separate**: NZ = Upcycled Building Materials Ltd (NZD, 15% GST, location "New Zealand");
