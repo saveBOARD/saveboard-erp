@@ -1,12 +1,12 @@
 "use client";
 
-import { ArrowRightLeft, FileText, Pencil, Printer, Truck } from "lucide-react";
+import { ArrowRightLeft, FileText, Pencil, Printer, Truck, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { convertToOrder, setOrderStatus, setQuoteStatus, type ActionResult } from "@/app/(app)/sell/actions";
 
-type Props = { id: string; kind: "quote" | "order"; status: string; quoteStatus: string | null };
+type Props = { id: string; kind: "quote" | "order"; status: string; quoteStatus: string | null; canReturn?: boolean };
 
 function Btn({ onClick, children, primary, disabled }: { onClick: () => void; children: React.ReactNode; primary?: boolean; disabled: boolean }) {
   return (
@@ -16,7 +16,7 @@ function Btn({ onClick, children, primary, disabled }: { onClick: () => void; ch
   );
 }
 
-export function OrderActions({ id, kind, status, quoteStatus }: Props) {
+export function OrderActions({ id, kind, status, quoteStatus, canReturn }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -105,6 +105,11 @@ export function OrderActions({ id, kind, status, quoteStatus }: Props) {
               </Btn>
             )}
             {status === "invoiced" && <Btn disabled={pending} onClick={() => run(() => setOrderStatus(id, "closed"))}>Close order</Btn>}
+            {canReturn && (
+              <Link href={`/sell/returns/new?order=${id}`} className="btn-secondary">
+                <Undo2 className="h-4 w-4" /> Return
+              </Link>
+            )}
           </>
         )}
         {pending && <span className="text-sm text-muted">Working…</span>}

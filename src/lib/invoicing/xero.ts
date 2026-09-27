@@ -40,6 +40,8 @@ export function dueDate(invoiceDate: string, terms: string | null | undefined) {
 }
 
 export type InvoiceOrder = {
+  /** Credit notes go in the same file with negative quantities; Xero imports a negative total as a credit note. */
+  credit?: boolean;
   number: string;
   reference: string | null;
   currency: string;
@@ -121,7 +123,7 @@ export function xeroInvoiceCsv(entityId: string, orders: InvoiceOrder[]) {
           dmy(o.invoiceDueOn),
           "",
           l.sku ? `[${l.sku}] ${l.description}` : l.description,
-          num(l.qty),
+          num(o.credit ? -Math.abs(l.qty) : l.qty),
           num(l.unitPrice),
           l.discountPct ? num(l.discountPct * 100) : "",
           x.accountCode,

@@ -31,5 +31,22 @@ assert.ok(lines[1].includes("05/10/2026,04/11/2026"));
 assert.ok(lines[1].includes(",20,55.5,15,200,15% GST on Income,"));
 assert.ok(lines[2].includes(",1,120,,200,Zero Rated,"));
 assert.ok(lines[1].startsWith("Whangārei Builders,"));
+const credit = xeroInvoiceCsv("AUS", [
+  {
+    credit: true,
+    number: "RET-1",
+    reference: "Return on SO-990",
+    currency: "AUD",
+    invoicedOn: "2026-10-20",
+    invoiceDueOn: "2026-10-20",
+    customer: { name: "KSI Shopfitters", email: null, line1: null, line2: null, city: null, region: null, postcode: null, country: null },
+    lines: [{ sku: "SBFORM1512002400", description: "saveBOARD form", qty: 3, unitPrice: 80, discountPct: 0, taxRate: 0.1 }],
+  },
+])
+  .replace(/^﻿/, "")
+  .trim()
+  .split("\r\n");
+assert.ok(credit[1].includes(",RET-1,Return on SO-990,20/10/2026,20/10/2026,,[SBFORM1512002400] saveBOARD form,-3,80,,200,GST on Income,"));
 console.log(lines.join("\n"));
+console.log(credit[1]);
 console.log("Xero CSV checks passed.");

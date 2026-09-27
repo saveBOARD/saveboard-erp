@@ -324,6 +324,67 @@ export const shipmentLines = pgTable(
   (t) => [index("shipment_lines_shipment").on(t.shipmentId), index("shipment_lines_order_line").on(t.orderLineId), index("shipment_lines_batch").on(t.batchNo)],
 );
 
+export const returnStatus = pgEnum("return_status", ["open", "received", "cancelled"]);
+
+/**
+ * A customer return (RET-…) against a shipped sales order. Open = waiting for the goods; Received = goods back
+ * (restock lines added to stock with "return" movements). Its credit note (same number) goes to Xero via the
+ * invoicing CSV; the amounts are in the order's currency, ex tax per line like the order.
+ */
+export const salesReturns = pgTable(
+  "sales_returns",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    entityId: text("entity_id").notNull().references(() => entities.id),
+    number: text("number").notNull(),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => salesOrders.id),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id),
+    status: returnStatus("status").notNull().default("open"),
+    returnDate: date("return_date").notNull(), // date raised
+    receivedOn: date("received_on"),
+    notes: text("notes"),
+    currency: text("currency").notNull(),
+    subtotal: money("subtotal").notNull().default("0"),
+    tax: money("tax").notNull().default("0"),
+    total: money("total").notNull().default("0"),
+    creditedOn: date("credited_on"), // set when the credit note is exported to Xero
+    createdBy: uuid("created_by").references(() => users.id),
+    receivedBy: uuid("received_by").references(() => users.id),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("sales_returns_entity_number").on(t.entityId, t.number), index("sales_returns_order").on(t.orderId)],
+);
+
+export const returnLines = pgTable(
+  "return_lines",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    returnId: uuid("return_id")
+      .notNull()
+      .references(() => salesReturns.id, { onDelete: "cascade" }),
+    orderLineId: uuid("order_line_id")
+      .notNull()
+      .references(() => orderLines.id),
+    lineNo: integer("line_no").notNull(),
+    productId: uuid("product_id").references(() => products.id),
+    sku: text("sku"),
+    description: text("description").notNull(),
+    qty: qty("qty").notNull(),
+    unitPrice: money("unit_price").notNull(), // credit per unit, ex tax, after the order line's discount
+    taxRate: numeric("tax_rate", { precision: 5, scale: 4 }).notNull(),
+    lineSubtotal: money("line_subtotal").notNull(),
+    lineTax: money("line_tax").notNull(),
+    restock: boolean("restock").notNull().default(true), // false = damaged/written off: credit only, no stock back
+    reason: text("reason"),
+    batchNo: text("batch_no"),
+  },
+  (t) => [index("return_lines_return").on(t.returnId), index("return_lines_order_line").on(t.orderLineId)],
+);
+
 /** A stock adjustment (SA-…): manual +/- corrections. Posted immediately; never edited — reversed instead. */
 export const stockAdjustments = pgTable(
   "stock_adjustments",

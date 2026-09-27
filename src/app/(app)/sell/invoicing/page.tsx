@@ -1,6 +1,6 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import type { Metadata } from "next";
-import { InvoicingList } from "@/components/invoicing-list";
+import { InvoicingList, type InvoiceRow, type InvoicingMode } from "@/components/invoicing-list";
 import { ListHeader } from "@/components/list-header";
 import { db, t } from "@/db";
 import { getEntityContext } from "@/lib/dal";
@@ -9,11 +9,14 @@ import { entityToday } from "@/lib/queries/stock-items";
 
 export const metadata: Metadata = { title: "Invoicing · saveBOARD ERP" };
 
-/** Shipped orders ready to invoice, and the Xero import file (one sales order = one invoice). */
-export default async function InvoicingPage(props: PageProps<"/sell/invoicing">) {
-  const { entity } = await getEntityContext();
-  const sp = await props.searchParams;
-  const mode = sp.tab === "invoiced" ? "invoiced" : "to_invoice";
+const TABS: { label: string; value: InvoicingMode }[] = [
+  { label: "To invoice", value: "to_invoice" },
+  { label: "Invoiced", value: "invoiced" },
+  { label: "Credit notes", value: "credits" },
+  { label: "Credited", value: "credited" },
+];
+
+async function orderRows(entityId: string, entityCurrency: string, invoiced: boolean): Promise<InvoiceRow[]> {
   const o = t.salesOrders;
   const rows = await db
     .select({
@@ -31,37 +34,75 @@ export default async function InvoicingPage(props: PageProps<"/sell/invoicing">)
     })
     .from(o)
     .innerJoin(t.customers, eq(t.customers.id, o.customerId))
-    .where(and(eq(o.entityId, entity.id), eq(o.status, mode === "invoiced" ? "invoiced" : "shipped")))
-    .orderBy(mode === "invoiced" ? desc(o.invoicedOn) : o.number, desc(o.number))
-    .limit(mode === "invoiced" ? 300 : 1000);
+    .where(and(eq(o.entityId, entityId), eq(o.status, invoiced ? "invoiced" : "shipped")))
+    .orderBy(invoiced ? desc(o.invoicedOn) : o.number, desc(o.number))
+    .limit(invoiced ? 300 : 1000);
+  return rows.map((r) => ({
+    id: r.id,
+    href: `/sell/orders/${r.id}`,
+    number: r.number,
+    title: r.title,
+    customer: r.customer,
+    reference: r.reference,
+    eventOn: r.shippedOn,
+    invoicedOn: r.invoicedOn,
+    dueOn: r.dueOn,
+    total: Number(r.subtotal),
+    currency: r.currency,
+    export: r.zeroRated && r.currency !== entityCurrency,
+  }));
+}
+
+async function returnRows(entityId: string, credited: boolean): Promise<InvoiceRow[]> {
+  const r = t.salesReturns;
+  const rows = await db
+    .select({
+      id: r.id,
+      number: r.number,
+      so: t.salesOrders.number,
+      customer: t.customers.name,
+      reference: t.salesOrders.customerReference,
+      returnDate: r.returnDate,
+      receivedOn: r.receivedOn,
+      creditedOn: r.creditedOn,
+      subtotal: r.subtotal,
+      currency: r.currency,
+    })
+    .from(r)
+    .innerJoin(t.salesOrders, eq(t.salesOrders.id, r.orderId))
+    .innerJoin(t.customers, eq(t.customers.id, r.customerId))
+    .where(and(eq(r.entityId, entityId), ne(r.status, "cancelled"), credited ? isNotNull(r.creditedOn) : isNull(r.creditedOn)))
+    .orderBy(credited ? desc(r.creditedOn) : r.returnDate, desc(r.number))
+    .limit(credited ? 300 : 1000);
+  return rows.map((x) => ({
+    id: x.id,
+    href: `/sell/returns/${x.id}`,
+    number: x.number,
+    title: x.so,
+    customer: x.customer,
+    reference: x.reference,
+    eventOn: x.receivedOn ?? `${x.returnDate} (awaiting goods)`,
+    invoicedOn: x.creditedOn,
+    dueOn: null,
+    total: Number(x.subtotal),
+    currency: x.currency,
+    export: false,
+  }));
+}
+
+/** Shipped orders ready to invoice and returns ready to credit, as Xero import files (one sales order = one invoice). */
+export default async function InvoicingPage(props: PageProps<"/sell/invoicing">) {
+  const { entity } = await getEntityContext();
+  const sp = await props.searchParams;
+  const mode = TABS.find((x) => x.value === sp.tab)?.value ?? "to_invoice";
+  const rows =
+    mode === "to_invoice" || mode === "invoiced" ? await orderRows(entity.id, entity.currency, mode === "invoiced") : await returnRows(entity.id, mode === "credited");
   const x = XERO_SETTINGS[entity.id];
 
   return (
     <>
-      <ListHeader
-        tabs={[
-          { label: "To invoice", href: "/sell/invoicing", active: mode === "to_invoice" },
-          { label: "Invoiced", href: "/sell/invoicing?tab=invoiced", active: mode === "invoiced" },
-        ]}
-      />
-      <InvoicingList
-        mode={mode}
-        today={entityToday(entity.id)}
-        entityCurrency={entity.currency}
-        rows={rows.map((r) => ({
-          id: r.id,
-          number: r.number,
-          title: r.title,
-          customer: r.customer,
-          reference: r.reference,
-          shippedOn: r.shippedOn,
-          invoicedOn: r.invoicedOn,
-          dueOn: r.dueOn,
-          total: Number(r.subtotal),
-          currency: r.currency,
-          export: r.zeroRated && r.currency !== entity.currency,
-        }))}
-      />
+      <ListHeader tabs={TABS.map((tab) => ({ label: tab.label, href: tab.value === "to_invoice" ? "/sell/invoicing" : `/sell/invoicing?tab=${tab.value}`, active: tab.value === mode }))} />
+      <InvoicingList mode={mode} today={entityToday(entity.id)} entityCurrency={entity.currency} rows={rows} />
       <section className="mt-4 grid gap-1 rounded border border-line bg-surface p-4 text-sm">
         <h2 className="font-medium">Importing into Xero ({entity.id} organisation)</h2>
         <ol className="ml-5 list-decimal text-muted">
@@ -70,6 +111,10 @@ export default async function InvoicingPage(props: PageProps<"/sell/invoicing">)
           <li>
             Invoices come in as drafts numbered with the SO number, account {x.accountCode}, tax &ldquo;{x.taxOnIncome}&rdquo; (&ldquo;{x.taxZeroRated}&rdquo; on zero-rated
             export goods). Check them, then approve.
+          </li>
+          <li>
+            Credit notes use the same import. Their lines have negative quantities, so Xero brings them in as credit notes numbered with the return number (RET-…).
+            Allocate each one to its invoice in Xero.
           </li>
           <li>A customer whose name doesn&apos;t exactly match a Xero contact is created as a new contact, so check any new ones.</li>
         </ol>

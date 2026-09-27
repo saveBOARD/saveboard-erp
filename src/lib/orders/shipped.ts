@@ -14,6 +14,18 @@ export async function shippedByLine(orderIds: string[]) {
   return new Map(rows.map((r) => [r.lineId, Number(r.qty)]));
 }
 
+/** Quantity returned (or being returned) per order line: cancelled returns excluded. */
+export async function returnedByLine(orderIds: string[]) {
+  if (!orderIds.length) return new Map<string, number>();
+  const rows = await db
+    .select({ lineId: t.returnLines.orderLineId, qty: sql<string>`sum(${t.returnLines.qty})` })
+    .from(t.returnLines)
+    .innerJoin(t.salesReturns, eq(t.salesReturns.id, t.returnLines.returnId))
+    .where(and(inArray(t.salesReturns.orderId, orderIds), sql`${t.salesReturns.status} <> 'cancelled'`))
+    .groupBy(t.returnLines.orderLineId);
+  return new Map(rows.map((r) => [r.lineId, Number(r.qty)]));
+}
+
 export type DeliveryState = "not_shipped" | "partial" | "shipped";
 
 /** Katana's Delivery column: nothing sent / some sent / everything sent. */
