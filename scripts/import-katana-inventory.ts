@@ -6,7 +6,10 @@
  *
  * - Existing products (matched on SKU, or on name for Katana items without a SKU) get Katana's current name,
  *   category, unit, average cost and default supplier. New SKUs are added as products.
+ *   A cost set manually in the app (cost_set_manually) is kept, not overwritten by Katana's average cost.
  * - Opening stock is REPLACED with Katana's "In stock", dated from the file name.
+ *   Negative Katana balances open at 0 (saveBOARD policy, 27/9/26); the movement note keeps Katana's figure.
+ *   Pass --keep-negatives to load them as-is.
  * - Refuses to run once the app has recorded real stock movements (shipments, production, adjustments),
  *   because replacing opening stock after that would double count.
  */
@@ -17,6 +20,7 @@ import { createDb } from "../src/db/client";
 import { entities, products, stockMovements, suppliers } from "../src/db/schema";
 
 const [entityId, file] = process.argv.slice(2).filter((a) => !a.startsWith("--"));
+const keepNegatives = process.argv.includes("--keep-negatives");
 if (!entityId || !file) {
   console.error('Usage: npm run db:import-inventory -- <NZ|AUS> "<path to Katana InventoryItems export.xlsx>"');
   process.exit(1);
@@ -78,7 +82,8 @@ async function main() {
   );
 
   const seen = new Set<string>();
-  const openings: { productId: string; qty: number; cost: number }[] = [];
+  const openings: { productId: string; qty: number; cost: number; note?: string }[] = [];
+  const zeroed: string[] = [];
   let updated = 0;
   let created = 0;
   const skipped: string[] = [];
@@ -113,7 +118,11 @@ async function main() {
       supplierId = s.id;
       supplierIds.set(supplierName.toLowerCase(), s.id);
     }
-    const cost = num(r["Average cost"]);
+    const katanaCost = num(r["Average cost"]);
+    const manualCost = match?.costSetManually ? Number(match.standardCost) : null;
+    const cost = manualCost ?? katanaCost;
+    if (manualCost !== null && Math.abs(manualCost - katanaCost) > 1e-9)
+      skipped.push(`${sku ?? name}: kept cost set in the app (${manualCost}) instead of Katana's ${katanaCost}`);
     const fields = {
       name,
       category,
@@ -143,8 +152,15 @@ async function main() {
       skipped.push(`no SKU and no product named "${name}" — add it in the app first`);
       continue;
     }
-    const qty = num(r["In stock"]);
-    if (track && qty !== 0) openings.push({ productId, qty, cost });
+    const katanaQty = num(r["In stock"]);
+    if (!track || katanaQty === 0) continue;
+    if (katanaQty < 0 && !keepNegatives) {
+      // policy: negative Katana balances open at zero; keep a zero row so the Katana figure is on record
+      openings.push({ productId, qty: 0, cost, note: `Katana showed ${katanaQty}; opened at 0 (negative balances set to zero)` });
+      zeroed.push(`${sku ?? name} (${katanaQty})`);
+    } else {
+      openings.push({ productId, qty: katanaQty, cost });
+    }
   }
 
   const at = snapshotTime(file, entityId);
@@ -159,16 +175,18 @@ async function main() {
         qty: String(o.qty),
         unitCost: String(o.cost),
         occurredAt: at,
-        note: `Opening stock from Katana inventory export ${label}`,
+        note: `Opening stock from Katana inventory export ${label}${o.note ? ` — ${o.note}` : ""}`,
       })),
     );
 
   for (const s of skipped) console.log(`  ! ${s}`);
+  if (zeroed.length) console.log(`  0 negative balances set to zero (${zeroed.length}): ${zeroed.join(", ")}`);
   const negative = openings.filter((o) => o.qty < 0).length;
   const value = openings.reduce((v, o) => v + o.qty * o.cost, 0);
   console.log(
     `${entityId}: ${items.length} Katana items → ${updated} products updated, ${created} added; opening stock replaced ` +
-      `(${openings.length} items, ${negative} negative, value ${value.toLocaleString("en-NZ", { maximumFractionDigits: 2 })} ${entity.currency}) as at ${label}.`,
+      `(${openings.filter((o) => o.qty !== 0).length} items in stock, ${zeroed.length} negatives zeroed, ${negative} negative left, ` +
+      `value ${value.toLocaleString("en-NZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${entity.currency}) as at ${label}.`,
   );
   process.exit(0);
 }

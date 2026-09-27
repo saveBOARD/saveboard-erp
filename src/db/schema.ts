@@ -152,6 +152,8 @@ export const products = pgTable(
     category: text("category"),
     uom: text("uom"),
     standardCost: money("standard_cost").notNull().default("0"),
+    /** True once someone sets the cost in the app; Katana imports then leave it alone. */
+    costSetManually: boolean("cost_set_manually").notNull().default(false),
     defaultSupplierId: uuid("default_supplier_id").references(() => suppliers.id),
     trackStock: boolean("track_stock").notNull().default(true),
     safetyStock: qty("safety_stock").notNull().default("0"),

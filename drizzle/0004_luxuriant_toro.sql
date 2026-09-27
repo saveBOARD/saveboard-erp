@@ -1,0 +1,1 @@
+ALTER TABLE "products" ADD COLUMN "cost_set_manually" boolean DEFAULT false NOT NULL;
