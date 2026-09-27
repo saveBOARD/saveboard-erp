@@ -14,6 +14,10 @@ server actions); the browser never queries tables directly.
 - **Auth is our own** (not Supabase Auth), so the app stays portable to any host: bcrypt password hashes in `users`,
   signed JWT session cookie (`src/lib/session.ts`), checks in `src/lib/dal.ts` (`requireUser`, `getEntityContext`,
   `assertEntityAccess`). `src/proxy.ts` only does the optimistic redirect to /login.
+- **Every new table must `ENABLE ROW LEVEL SECURITY` in its migration** (see `drizzle/0001_enable_rls.sql`): this
+  closes Supabase's public Data API; the app connects as the owner and is unaffected.
+- Supabase `DATABASE_URL` must be the **Transaction pooler** (`aws-0-ap-southeast-2.pooler.supabase.com:6543`,
+  user `postgres.<ref>`), not the IPv6-only direct host `db.<ref>.supabase.co`.
 - Local dev needs no accounts: without `DATABASE_URL` the app uses PGlite (embedded Postgres) in `.data/pglite`.
 - Lists use the shared `src/components/data-table.tsx` (filters, sort, totals, Excel export, column picker).
 

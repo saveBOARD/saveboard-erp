@@ -265,10 +265,16 @@ async function importEntity(db: Db, entityId: string, file: string) {
   const negative = productRows.filter((p) => p.trackStock && p.opening < 0).length;
   console.log(
     `${entityId}: ${supplierRows.length} suppliers, ${customerRows.length} customers ` +
-      `(${(sitesAdded as unknown as { rowCount?: number; affectedRows?: number }).rowCount ?? (sitesAdded as unknown as { affectedRows?: number }).affectedRows ?? "?"} new delivery sites), ` +
+      `(${siteCount(sitesAdded)} new delivery sites), ` +
       `${productRows.length} products, ${openings.length} opening stock rows (${negative} negative), ` +
       `next numbers: ${Object.entries(last).map(([k, n]) => `${k}-${n + 1}`).join(" ")}`,
   );
+}
+
+/** Rows affected by a raw insert: PGlite reports `affectedRows`, postgres-js reports `count`. */
+function siteCount(result: unknown) {
+  const r = result as { affectedRows?: number; count?: number; rowCount?: number };
+  return r.affectedRows ?? r.count ?? r.rowCount ?? 0;
 }
 
 async function main() {
