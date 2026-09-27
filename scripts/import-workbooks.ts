@@ -1,7 +1,8 @@
 /**
  * Imports master data from the Excel MVP workbooks into the database:
  *   suppliers, customers (+ a default delivery site), products, opening stock, document number sequences.
- * Re-runnable: rows are matched on (entity, name) / (entity, SKU) and updated; opening stock is replaced.
+ * Re-runnable: rows are matched on (entity, name) / (entity, SKU) and updated (customers: empty fields only);
+ * opening stock is replaced.
  *
  *   npm run db:import                     # uses ../saveBOARD_NZ_ERP_MVP.xlsx and ../saveBOARD_AUS_ERP_MVP_3.xlsx
  *   npm run db:import -- NZ=path AUS=path # other files
@@ -159,14 +160,19 @@ async function importEntity(db: Db, entityId: string, file: string) {
     await db
       .insert(customers)
       .values(customerRows)
+      // Existing customers: only fill empty fields — details entered in the app (or by the Katana customer
+      // import) are never overwritten or blanked, and credit hold stays as set in the app.
       .onConflictDoUpdate({
         target: [customers.entityId, customers.name],
         set: Object.fromEntries(
           [
             "code", "billing_line1", "billing_line2", "billing_city", "billing_region", "billing_postcode",
             "billing_country", "contact_name", "phone", "email", "business_number", "payment_terms", "price_tier",
-            "credit_limit", "credit_hold", "notes",
-          ].map((c) => [c.replace(/_([a-z0-9])/g, (_, ch) => ch.toUpperCase()), sql.raw(`excluded.${c}`)]),
+            "credit_limit", "notes",
+          ].map((c) => [
+            c.replace(/_([a-z0-9])/g, (_, ch) => ch.toUpperCase()),
+            sql.raw(`coalesce(customers.${c}, excluded.${c})`),
+          ]),
         ),
       });
   // default delivery site = billing address, only for customers that have no sites yet
