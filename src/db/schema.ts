@@ -321,6 +321,84 @@ export const shipmentLines = pgTable(
   (t) => [index("shipment_lines_shipment").on(t.shipmentId), index("shipment_lines_order_line").on(t.orderLineId), index("shipment_lines_batch").on(t.batchNo)],
 );
 
+/** A stock adjustment (SA-…): manual +/- corrections. Posted immediately; never edited — reversed instead. */
+export const stockAdjustments = pgTable(
+  "stock_adjustments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    entityId: text("entity_id").notNull().references(() => entities.id),
+    number: text("number").notNull(),
+    adjustedOn: date("adjusted_on").notNull(),
+    reason: text("reason").notNull(),
+    notes: text("notes"),
+    stocktakeId: uuid("stocktake_id"), // set when created by completing a stocktake
+    reversesId: uuid("reverses_id"), // set on a reversing adjustment
+    createdBy: uuid("created_by").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("stock_adjustments_entity_number").on(t.entityId, t.number)],
+);
+
+export const stockAdjustmentLines = pgTable(
+  "stock_adjustment_lines",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    adjustmentId: uuid("adjustment_id")
+      .notNull()
+      .references(() => stockAdjustments.id, { onDelete: "cascade" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id),
+    qty: qty("qty").notNull(), // signed: + adds stock, - removes it
+    unitCost: money("unit_cost").notNull(),
+    batchNo: text("batch_no"),
+    note: text("note"),
+  },
+  (t) => [index("stock_adjustment_lines_adjustment").on(t.adjustmentId)],
+);
+
+export const stocktakeStatus = pgEnum("stocktake_status", ["counting", "completed", "cancelled"]);
+
+/** A stocktake (STK-…): expected quantities frozen at the start, counts entered, differences posted as one adjustment. */
+export const stocktakes = pgTable(
+  "stocktakes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    entityId: text("entity_id").notNull().references(() => entities.id),
+    number: text("number").notNull(),
+    reason: text("reason").notNull(),
+    scope: text("scope").notNull(), // what was counted, e.g. "All stock items", "Materials", "Category: Multi-use Panel"
+    status: stocktakeStatus("status").notNull().default("counting"),
+    snapshotAt: timestamp("snapshot_at", { withTimezone: true }).notNull().defaultNow(),
+    notes: text("notes"),
+    adjustmentId: uuid("adjustment_id").references(() => stockAdjustments.id),
+    createdBy: uuid("created_by").references(() => users.id),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    completedBy: uuid("completed_by").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("stocktakes_entity_number").on(t.entityId, t.number)],
+);
+
+export const stocktakeLines = pgTable(
+  "stocktake_lines",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    stocktakeId: uuid("stocktake_id")
+      .notNull()
+      .references(() => stocktakes.id, { onDelete: "cascade" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id),
+    expectedQty: qty("expected_qty").notNull(), // on hand when the stocktake started
+    countedQty: qty("counted_qty"), // null = not counted yet
+    note: text("note"),
+    countedBy: uuid("counted_by").references(() => users.id),
+    countedAt: timestamp("counted_at", { withTimezone: true }),
+  },
+  (t) => [uniqueIndex("stocktake_lines_item").on(t.stocktakeId, t.productId)],
+);
+
 export const auditLog = pgTable(
   "audit_log",
   {

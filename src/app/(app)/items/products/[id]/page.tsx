@@ -132,7 +132,12 @@ export default async function ProductPage(props: PageProps<"/items/products/[id]
               qty: Number(m.qty),
               uom: unit,
               ref: m.refNumber,
-              href: m.refType === "sales_order" && m.refId ? `/sell/orders/${m.refId}` : null,
+              href:
+                m.refType === "sales_order" && m.refId
+                  ? `/sell/orders/${m.refId}`
+                  : m.refType === "stock_adjustment" && m.refId
+                    ? `/stock/adjustments/${m.refId}`
+                    : null,
               by,
               note: m.note,
             }))}
