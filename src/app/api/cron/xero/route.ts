@@ -1,4 +1,5 @@
 import { db, t } from "@/db";
+import { accessToken } from "@/lib/xero/client";
 import { refreshFromXero } from "@/lib/xero/sync";
 
 /**
@@ -12,6 +13,9 @@ export async function GET(request: Request) {
   const results: Record<string, unknown> = {};
   for (const { entityId } of connections) {
     try {
+      // Always renew the tokens: Xero ends a connection whose refresh token goes unused for 60 days,
+      // and refreshFromXero only calls Xero when there are open invoices to check.
+      await accessToken(entityId);
       results[entityId] = await refreshFromXero(entityId);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
