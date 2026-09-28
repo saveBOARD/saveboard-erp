@@ -274,6 +274,8 @@ export const salesOrders = pgTable(
     shipToPostcode: text("ship_to_postcode"),
     shipToCountry: text("ship_to_country"),
     notes: text("notes"),
+    /** Price list used to price this quote / order (starts as the customer's list; can be changed per document). */
+    priceListId: uuid("price_list_id").references(() => priceLists.id, { onDelete: "set null" }),
     currency: text("currency").notNull(),
     /** Entity currency per 1 unit of the order currency (1 unless e.g. a USD export order). */
     fxRate: numeric("fx_rate", { precision: 14, scale: 6 }).notNull().default("1"),

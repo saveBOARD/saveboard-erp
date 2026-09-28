@@ -46,6 +46,7 @@ const OrderSchema = z.object({
   shipToPostcode: optText,
   shipToCountry: optText,
   notes: optText,
+  priceListId: z.string().uuid().nullable().optional(),
   lines: z.array(LineSchema).min(1, "Add at least one line"),
 });
 export type OrderInput = z.input<typeof OrderSchema>;
@@ -86,9 +87,17 @@ export async function saveOrder(input: OrderInput): Promise<ActionResult> {
       .where(and(eq(t.products.entityId, entity.id), inArray(t.products.id, productIds)));
     if (found.length !== productIds.length) return { error: "One of the products isn't in this entity's product list." };
   }
+  if (v.priceListId) {
+    const [pl] = await db
+      .select({ id: t.priceLists.id })
+      .from(t.priceLists)
+      .where(and(eq(t.priceLists.id, v.priceListId), eq(t.priceLists.entityId, entity.id)));
+    if (!pl) return { error: "That price list isn't in this entity." };
+  }
 
   const totals = orderTotals(v.lines);
   const header = {
+    priceListId: v.priceListId ?? null,
     title: v.title,
     customerId: v.customerId,
     customerReference: v.customerReference,

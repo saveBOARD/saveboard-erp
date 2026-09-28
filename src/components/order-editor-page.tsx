@@ -37,6 +37,7 @@ export async function OrderEditorPage({ kind, id, presetCustomerId }: { kind: "q
         country: o.shipToCountry ?? "",
       },
       notes: o.notes,
+      priceListId: o.priceListId,
       lines: found.lines.map(({ l }) => ({
         id: l.id,
         productId: l.productId,

@@ -37,6 +37,7 @@ export type EditorInitial = {
   quoteExpiresOn: string | null;
   shipTo: ShipTo;
   notes: string | null;
+  priceListId: string | null;
   lines: { id: string; productId: string | null; sku: string | null; description: string; qty: number; unitPrice: number; discountPct: number; taxRate: number }[];
 };
 
@@ -114,6 +115,11 @@ export function OrderEditor({
         : { ...emptyShipTo, country: preset?.country ?? "" }),
   );
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const defaultListId = priceLists.find((pl) => pl.isDefault)?.id ?? "";
+  // Existing documents keep the list they were saved with; otherwise the customer's list, else the default.
+  const [priceListId, setPriceListId] = useState(
+    initial ? (initial.priceListId ?? customerById.get(initial.customerId)?.priceListId ?? defaultListId) : (preset?.priceListId ?? defaultListId),
+  );
   const [lines, setLines] = useState<Line[]>(() =>
     initial
       ? initial.lines.map((l) => {
@@ -166,6 +172,10 @@ export function OrderEditor({
     const c = customerByName.get(text.trim().toLowerCase());
     setCustomerId(c?.id ?? "");
     if (c && c.id !== customerId) {
+      // A new customer brings their own price list; automatically filled prices follow it.
+      const listId = c.priceListId ?? defaultListId;
+      setPriceListId(listId);
+      reprice(listId, false, c.id);
       const site = c.sites.find((s) => s.isDefault) ?? c.sites[0];
       setShipTo(
         site
@@ -188,15 +198,39 @@ export function OrderEditor({
     setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   }
 
-  const customerList = customer?.priceListId ? priceLists.find((pl) => pl.id === customer.priceListId) : priceLists.find((pl) => pl.isDefault);
-  const priceFor = (p: EditorProduct) =>
+  const priceList = priceLists.find((pl) => pl.id === priceListId);
+  const priceFor = (p: EditorProduct, listId = priceListId, forCustomer = customerId) =>
     suggestPrice({
       productId: p.id,
-      customerListId: customer?.priceListId ?? null,
+      customerListId: listId || null,
       lists: priceLists,
-      lastForCustomer: customerId ? customerPrices[`${customerId}|${p.id}`] : null,
+      lastForCustomer: forCustomer ? customerPrices[`${forCustomer}|${p.id}`] : null,
       lastForAnyone: p.lastPrice,
     });
+
+  /**
+   * Re-price product lines from a price list. Lines whose price was filled automatically always follow the list;
+   * lines typed by hand (or saved earlier) are only replaced when includeManual is true.
+   */
+  function reprice(listId: string, includeManual: boolean, forCustomer = customerId) {
+    setLines((ls) =>
+      ls.map((l) => {
+        const p = l.productId ? productById.get(l.productId) : undefined;
+        if (!p) return l;
+        const auto = !!l.priceSource || !l.unitPrice || Number(l.unitPrice) === 0;
+        if (!auto && !includeManual) return l;
+        const s = priceFor(p, listId, forCustomer);
+        return s ? { ...l, unitPrice: String(s.price), priceSource: s.source } : l;
+      }),
+    );
+  }
+
+  function choosePriceList(listId: string) {
+    setPriceListId(listId);
+    const manual = lines.filter((l) => l.productId && !l.priceSource && Number(l.unitPrice) > 0).length;
+    const includeManual = manual > 0 && window.confirm(`Also replace the ${manual} price${manual === 1 ? "" : "s"} typed by hand (or saved earlier) with the new list's prices?`);
+    reprice(listId, includeManual);
+  }
 
   function chooseItem(key: string, text: string) {
     const p = productByLabel.get(text.trim().toLowerCase());
@@ -221,17 +255,11 @@ export function OrderEditor({
     );
   }
 
-  /** Re-price every product line from the customer's price list (e.g. after changing the customer). */
+  /** Reset every product line to the selected price list, including prices typed by hand. */
   function applyPriceList() {
     const manual = lines.filter((l) => l.productId && !l.priceSource && Number(l.unitPrice) > 0).length;
     if (manual && !window.confirm(`Replace the prices on all product lines, including ${manual} typed or saved by hand?`)) return;
-    setLines((ls) =>
-      ls.map((l) => {
-        const p = l.productId ? productById.get(l.productId) : undefined;
-        const s = p ? priceFor(p) : null;
-        return s ? { ...l, unitPrice: String(s.price), priceSource: s.source } : l;
-      }),
-    );
+    reprice(priceListId, true);
   }
 
   function addLine() {
@@ -246,6 +274,7 @@ export function OrderEditor({
     if (!customerId) return setError("Choose a customer from the list (start typing their name).");
     const input: OrderInput = {
       id: initial?.id ?? null,
+      priceListId: priceListId || null,
       kind,
       title: title || null,
       customerId,
@@ -310,6 +339,21 @@ export function OrderEditor({
             autoComplete="off"
             className="lg:col-span-2"
           />
+          <label className="grid gap-1 text-xs text-muted">
+            <span>
+              Price list
+              {customer && priceListId !== (customer.priceListId ?? defaultListId) && <span className="ml-1 text-warn">(not this customer&apos;s usual list)</span>}
+            </span>
+            <select id="priceList" value={priceListId} onChange={(e) => choosePriceList(e.target.value)} className="input text-sm text-ink">
+              {priceLists.map((pl) => (
+                <option key={pl.id} value={pl.id}>
+                  {pl.name}
+                  {pl.isDefault ? " (default)" : ""}
+                  {customer && pl.id === (customer.priceListId ?? defaultListId) ? " — customer's list" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
           <Input label="Reference (shown after the number)" id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Cranbourne north" />
           <Input label="Customer PO / reference" id="customerReference" value={customerReference} onChange={(e) => setCustomerReference(e.target.value)} />
           <Input label="Created" id="orderDate" type="date" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} required />
@@ -441,16 +485,10 @@ export function OrderEditor({
                   <button type="button" onClick={addLine} className="btn-secondary">
                     <Plus className="h-4 w-4" /> Add line
                   </button>
-                  {customerList && lines.some((l) => l.productId) && (
-                    <button type="button" onClick={applyPriceList} className="btn-secondary" title="Re-price every product line from this customer's price list">
-                      Apply price list
+                  {priceList && lines.some((l) => l.productId) && (
+                    <button type="button" onClick={applyPriceList} className="btn-secondary" title={`Reset every product line to the ${priceList.name} price, including prices typed by hand`}>
+                      Reset prices to {priceList.name}
                     </button>
-                  )}
-                  {customer && customerList && (
-                    <span className="text-xs text-muted">
-                      Price list: <b>{customerList.name}</b>
-                      {!customer.priceListId && " (default)"}
-                    </span>
                   )}
                 </div>
               </td>
