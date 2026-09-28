@@ -12,6 +12,11 @@
  *   Pass --keep-negatives to load them as-is.
  * - Refuses to run once the app has recorded real stock movements (shipments, production, adjustments),
  *   because replacing opening stock after that would double count.
+ * - --catch-up (switchover when an entity has already started working in the app): the movements already recorded
+ *   in the app are kept, and each item's opening stock is set to Katana's figure MINUS the app's net movements, so
+ *   stock on hand equals Katana's figure exactly. Only correct when Katana's figures already include everything the
+ *   app has shipped/received (e.g. an order shipped in the app has also been marked delivered in Katana). The app
+ *   movements absorbed are listed so that can be checked.
  */
 import "./env";
 import { fixMojibake } from "./text-fix";
@@ -22,6 +27,7 @@ import { entities, products, stockMovements, suppliers } from "../src/db/schema"
 
 const [entityId, file] = process.argv.slice(2).filter((a) => !a.startsWith("--"));
 const keepNegatives = process.argv.includes("--keep-negatives");
+const catchUp = process.argv.includes("--catch-up");
 if (!entityId || !file) {
   console.error('Usage: npm run db:import-inventory -- <NZ|AUS> "<path to Katana InventoryItems export.xlsx>"');
   process.exit(1);
@@ -56,8 +62,28 @@ async function main() {
     .select({ n: sql<number>`count(*)::int` })
     .from(stockMovements)
     .where(and(eq(stockMovements.entityId, entityId), ne(stockMovements.kind, "opening")));
-  if (real.n > 0) {
-    throw new Error(`${entityId} already has ${real.n} real stock movements in the app. Opening stock can't be replaced any more — use a stocktake instead.`);
+  if (real.n > 0 && !catchUp) {
+    throw new Error(
+      `${entityId} already has ${real.n} real stock movements in the app. Opening stock can't be replaced any more — use a stocktake, ` +
+        `or --catch-up if Katana's figures already include everything done in the app (see the note at the top of this script).`,
+    );
+  }
+  // Net quantity per product already moved by the app (shipments, returns, receipts, production, adjustments).
+  const appNet = new Map<string, number>();
+  if (catchUp && real.n > 0) {
+    const rows = await db
+      .select({ productId: stockMovements.productId, qty: sql<string>`sum(${stockMovements.qty})` })
+      .from(stockMovements)
+      .where(and(eq(stockMovements.entityId, entityId), ne(stockMovements.kind, "opening")))
+      .groupBy(stockMovements.productId);
+    for (const r of rows) if (Math.abs(Number(r.qty)) > 1e-9) appNet.set(r.productId, Number(r.qty));
+    const refs = await db
+      .select({ ref: stockMovements.refNumber, kind: stockMovements.kind, n: sql<number>`count(*)::int` })
+      .from(stockMovements)
+      .where(and(eq(stockMovements.entityId, entityId), ne(stockMovements.kind, "opening")))
+      .groupBy(stockMovements.refNumber, stockMovements.kind);
+    console.log(`  Catch-up: keeping ${real.n} app movements (${refs.map((r) => `${r.kind} ${r.ref ?? "—"}`).join(", ")}).`);
+    console.log(`  Katana's figures must already include these, or those items' stock will be off by that much.`);
   }
 
   const wb = new ExcelJS.Workbook();
@@ -164,6 +190,21 @@ async function main() {
     }
   }
 
+  // Catch-up: opening = Katana's figure − what the app has already moved, so on hand = Katana's figure.
+  if (catchUp && appNet.size) {
+    const byProduct = new Map(openings.map((o) => [o.productId, o]));
+    for (const [productId, net] of appNet) {
+      const o = byProduct.get(productId);
+      if (o) {
+        o.note = `${o.note ? `${o.note}; ` : ""}Katana ${o.qty}, app movements already recorded ${net}: opening ${o.qty - net} so stock = Katana`;
+        o.qty = o.qty - net;
+      } else {
+        const [p] = await db.select({ cost: products.standardCost }).from(products).where(eq(products.id, productId));
+        openings.push({ productId, qty: -net, cost: Number(p?.cost ?? 0), note: `Katana 0, app movements already recorded ${net}: opening ${-net} so stock = Katana` });
+      }
+    }
+  }
+
   const at = snapshotTime(file, entityId);
   const label = at.toLocaleString("en-NZ", { timeZone: entityId === "AUS" ? "Australia/Sydney" : "Pacific/Auckland", dateStyle: "short", timeStyle: "short" });
   await db.delete(stockMovements).where(and(eq(stockMovements.entityId, entityId), eq(stockMovements.kind, "opening")));
@@ -191,10 +232,10 @@ async function main() {
 
   for (const s of skipped) console.log(`  ! ${s}`);
   if (zeroed.length) console.log(`  0 negative balances set to zero (${zeroed.length}): ${zeroed.join(", ")}`);
-  const negative = openings.filter((o) => o.qty < 0).length;
-  const value = openings.reduce((v, o) => v + o.qty * o.cost, 0);
+  const negative = openings.filter((o) => o.qty + (appNet.get(o.productId) ?? 0) < -1e-9).length;
+  const value = openings.reduce((v, o) => v + (o.qty + (appNet.get(o.productId) ?? 0)) * o.cost, 0);
   console.log(
-    `${entityId}: ${items.length} Katana items → ${updated} products updated, ${created} added; opening stock replaced ` +
+    `${entityId}: ${items.length} Katana items → ${updated} products updated, ${created} added; opening stock replaced${appNet.size ? ` (catch-up: ${appNet.size} items adjusted for app movements)` : ""} ` +
       `(${openings.filter((o) => o.qty !== 0).length} items in stock, ${zeroed.length} negatives zeroed, ${negative} negative left, ` +
       `value ${value.toLocaleString("en-NZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${entity.currency}) as at ${label}.`,
   );

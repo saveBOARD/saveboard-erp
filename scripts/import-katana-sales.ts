@@ -98,6 +98,19 @@ async function main() {
     ),
   );
 
+  // Orders the app has already worked on (shipped, returned, or edited by someone) are never overwritten by Katana.
+  const workedRows = await db.execute<{ number: string }>(sql`
+        select o.number from sales_orders o
+        where o.entity_id = ${entityId} and (
+          exists (select 1 from shipments s where s.order_id = o.id)
+          or exists (select 1 from sales_returns r where r.order_id = o.id)
+          or exists (select 1 from audit_log a where a.table_name = 'sales_orders' and a.record_id = o.id::text and a.user_id is not null)
+        )`);
+  const workedOn = new Set(
+    ((Array.isArray(workedRows) ? workedRows : (workedRows as unknown as { rows: { number: string }[] }).rows) as { number: string }[]).map((r) => r.number),
+  );
+  const keptInApp: string[] = [];
+
   let newCustomers = 0;
   let unknownSkuLines = 0;
   let maxNumber = 0;
@@ -108,8 +121,12 @@ async function main() {
   for (const [rawNumber, lines] of byQuote) {
     const head = lines[0];
     const { number, title } = splitNumber(rawNumber);
+    if (/^Q?SO-\d+$/.test(number)) maxNumber = Math.max(maxNumber, Number(number.replace(/\D/g, "")));
+    if (workedOn.has(number)) {
+      keptInApp.push(number);
+      continue;
+    }
     quoteNumbers.push(number);
-    maxNumber = Math.max(maxNumber, Number(number.replace(/\D/g, "")));
 
     // ---- customer (match on name, else create from the quote's delivery details)
     const customerName = text(head["Customer"]) ?? "Unknown customer";
@@ -255,6 +272,7 @@ async function main() {
       `${entity.currency} ex tax, all totals match Katana), ${newCustomers} new customers, ` +
       `${unknownSkuLines} lines with SKUs not in the product list. Next SO number: SO-${seq.nextValue}.`,
   );
+  if (keptInApp.length) console.log(`  Kept as they are in the app (already shipped, returned or edited there): ${keptInApp.join(", ")}`);
   process.exit(0);
 }
 
