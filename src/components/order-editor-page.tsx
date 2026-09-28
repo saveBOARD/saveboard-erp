@@ -7,7 +7,6 @@ import { getOrder } from "@/lib/queries/orders";
 /** Server wrapper: loads everything the editor needs for a new or existing quote / order. */
 export async function OrderEditorPage({ kind, id, presetCustomerId }: { kind: "quote" | "order"; id?: string; presetCustomerId?: string }) {
   const { entity } = await getEntityContext();
-  const data = await editorData(entity.id);
   let initial: EditorInitial | undefined;
 
   if (id) {
@@ -51,6 +50,7 @@ export async function OrderEditorPage({ kind, id, presetCustomerId }: { kind: "q
     };
   }
 
+  const data = await editorData(entity.id, [initial?.customerId, presetCustomerId].filter((x): x is string => !!x));
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: entity.id === "AUS" ? "Australia/Sydney" : "Pacific/Auckland" }).format(new Date());
   return (
     <OrderEditor

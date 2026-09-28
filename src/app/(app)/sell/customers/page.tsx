@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import { DataTable, type Column } from "@/components/data-table";
 import { ListHeader } from "@/components/list-header";
@@ -7,8 +7,9 @@ import { getEntityContext } from "@/lib/dal";
 
 export const metadata: Metadata = { title: "Customers · saveBOARD ERP" };
 
-export default async function CustomersPage() {
+export default async function CustomersPage(props: PageProps<"/sell/customers">) {
   const { entity } = await getEntityContext();
+  const inactive = (await props.searchParams).tab === "inactive";
   const c = t.customers;
   const rows = await db
     .select({
@@ -28,7 +29,7 @@ export default async function CustomersPage() {
     })
     .from(c)
     .leftJoin(t.priceLists, eq(t.priceLists.id, c.priceListId))
-    .where(eq(c.entityId, entity.id))
+    .where(and(eq(c.entityId, entity.id), eq(c.active, !inactive)))
     .orderBy(asc(c.name));
 
   const columns: Column[] = [
@@ -48,7 +49,15 @@ export default async function CustomersPage() {
 
   return (
     <>
-      <ListHeader newLabel="Customer" newHref="/sell/customers/new" />
+      <ListHeader
+        tabs={[
+          { label: "Active", href: "/sell/customers", active: !inactive },
+          { label: "Inactive", href: "/sell/customers?tab=inactive", active: inactive },
+        ]}
+        newLabel="Customer"
+        newHref="/sell/customers/new"
+        note={inactive ? "Hidden from quotes and orders. Edit a customer and tick Active to use them again." : undefined}
+      />
       <DataTable
         columns={columns}
         rows={rows.map((r) => ({ ...r, priceList: r.priceList ?? "Default", creditLimit: r.creditLimit === null ? null : Number(r.creditLimit) }))}

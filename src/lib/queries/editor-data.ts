@@ -1,5 +1,5 @@
 import "server-only";
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import { db, t } from "@/db";
 import { priceListsData } from "@/lib/queries/price-lists";
 
@@ -35,12 +35,18 @@ export type EditorProduct = {
  * Customers (with delivery sites and price list), products (with last price charged), price lists, and the last
  * price charged per customer and product, for the quote/order editor.
  */
-export async function editorData(entityId: string) {
+export async function editorData(entityId: string, keepCustomerIds: string[] = []) {
   const [customers, sites, products, lastPrices, lastCustomerPrices, priceLists] = await Promise.all([
     db
       .select({ id: t.customers.id, name: t.customers.name, country: t.customers.billingCountry, priceListId: t.customers.priceListId })
       .from(t.customers)
-      .where(eq(t.customers.entityId, entityId))
+      .where(
+        and(
+          eq(t.customers.entityId, entityId),
+          // Inactive customers are hidden from the order screens, except the one this document is for.
+          keepCustomerIds.length ? or(eq(t.customers.active, true), inArray(t.customers.id, keepCustomerIds)) : eq(t.customers.active, true),
+        ),
+      )
       .orderBy(asc(t.customers.name)),
     db
       .select({ site: t.customerSites })

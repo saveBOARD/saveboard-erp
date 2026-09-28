@@ -439,6 +439,8 @@ export async function reverseShipment(shipmentId: string): Promise<ActionResult>
       .where(and(eq(t.shipments.id, shipmentId), eq(t.shipments.entityId, entity.id)));
     if (!s) return { error: "Shipment not found." };
     if (s.s.reversedAt) return { error: "This shipment has already been reversed." };
+    // Deliveries imported from Katana's history have no stock movements, so there is nothing to reverse.
+    if (s.s.carrier === "Katana") return { error: "This delivery was made in Katana (imported history), so it can't be reversed here. Use a return instead." };
     if (!["open", "picked", "shipped"].includes(s.order.status)) return { error: `The order is ${s.order.status}, so its shipments can't be reversed.` };
     const ref = `${s.order.number}/${s.s.seq}`;
     await db.transaction(async (tx) => {

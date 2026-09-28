@@ -18,14 +18,15 @@ switchover loads four exports per entity: customers, inventory, quotes and open 
    | Sell → Quotes → download | `NZ SalesOrders-<date>.xlsx` |
    | Sell → Sales orders → Open → download | `NZ OpenSalesOrders-<date>.xlsx` |
    | Sell → Customers → export for editing | `NZ katana_customers_edit_<date>.xlsx` (optional) |
-   | Sell → Sales orders → Done → download | `NZ DoneSalesOrders-<date>.xlsx` (optional: brings the sales reports' history up to date) |
+   | Sell → Sales orders → Done → download | `NZ DoneSalesOrders-<date>.xlsx` (optional: completed orders for Sell → Sales orders → Done and the sales reports) |
 3. **Load them.** The script takes the newest file of each kind:
    - rehearsal on the local copy: `powershell -ExecutionPolicy Bypass -File scripts/switchover.ps1`
    - live: `powershell -ExecutionPolicy Bypass -File scripts/switchover.ps1 -Target prod`
 
    In order, per entity: customers → stock (replaces opening stock; negatives set to 0; costs set by hand kept) →
-   quotes → open orders → close anything from earlier imports that has since finished in Katana → expire quotes
-   over a year old. Every step is safe to repeat, so if one fails, fix it and run the script again.
+   quotes → open orders → close anything from earlier imports that has since finished in Katana → completed
+   orders (Done: loaded as Closed, with a Katana delivery record and no stock movement) and the sales-report history
+   → expire quotes over a year old. Every step is safe to repeat, so if one fails, fix it and run the script again.
 4. **Check against Katana** (the script prints these):
    - stock value per entity = Katana's inventory value (as at the export time)
    - number of open orders and their totals ("all totals match Katana")

@@ -28,7 +28,9 @@ Run @("tsx", "scripts/import-katana-sales.ts", "NZ", "../NZ SalesOrders-2026-09-
 Run @("tsx", "scripts/import-katana-sales.ts", "NZ", "../NZ OpenSalesOrders-2026-09-27-16_29.xlsx")
 Run @("tsx", "scripts/import-katana-sales.ts", "AUS", "../AUS OpenSalesOrders-2026-09-27-16_31.xlsx")
 Run @("tsx", "scripts/expire-quotes.ts", "365")
-# Katana sales history (reports only) from the workbooks' SalesOrders_History sheets
-Run @("tsx", "scripts/import-sales-history.ts", "NZ", "../saveBOARD_NZ_ERP_MVP.xlsx")
-Run @("tsx", "scripts/import-sales-history.ts", "AUS", "../saveBOARD_AUS_ERP_MVP_3.xlsx")
+# Katana completed orders (Sell > Sales orders > Done) as Closed orders, and the same lines for the sales reports
+foreach ($d in @(@("NZ", "../NZ DoneSalesOrders-2026-09-29-10_07.xlsx"), @("AUS", "../AUS DoneSalesOrders-2026-09-29-10_11.xlsx"))) {
+  Run @("tsx", "scripts/import-katana-done.ts", $d[0], $d[1])
+  Run @("tsx", "scripts/import-sales-history.ts", $d[0], $d[1])
+}
 Write-Host "Local database rebuilt." -ForegroundColor Green
