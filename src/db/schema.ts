@@ -122,6 +122,9 @@ export const customers = pgTable(
     creditHold: boolean("credit_hold").notNull().default(false),
     notes: text("notes"),
     active: boolean("active").notNull().default(true),
+    /** Deleted in the app (no longer trading / no longer a customer). Kept only so past orders keep their customer. */
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    deletedBy: uuid("deleted_by").references(() => users.id),
     xeroContactId: text("xero_contact_id"),
     ...timestamps,
   },

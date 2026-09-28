@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { db, t } from "@/db";
 import { diff, formNumber, formText } from "@/lib/audit";
 import { assertEntityAccess, getEntityContext } from "@/lib/dal";
+import { customerDeleteCheck } from "@/lib/queries/customer-delete";
 
 export type FormState = { error?: string; ok?: string } | undefined;
 
@@ -52,7 +53,7 @@ export async function saveCustomer(_: FormState, fd: FormData): Promise<FormStat
       active: fd.get("active") !== "off",
     };
     const [clash] = await db
-      .select({ id: t.customers.id })
+      .select({ id: t.customers.id, deletedAt: t.customers.deletedAt })
       .from(t.customers)
       .where(
         and(
@@ -61,6 +62,7 @@ export async function saveCustomer(_: FormState, fd: FormData): Promise<FormStat
           id ? ne(t.customers.id, id) : sql`true`,
         ),
       );
+    if (clash?.deletedAt) return { error: `A deleted customer is called "${name}". Restore them from Customers → Deleted instead of adding them again.` };
     if (clash) return { error: `There is already a customer called "${name}".` };
     if (values.priceListId) {
       const [pl] = await db
@@ -140,4 +142,56 @@ export async function deleteSite(fd: FormData) {
   await db.delete(t.customerSites).where(and(eq(t.customerSites.id, siteId), eq(t.customerSites.customerId, customerId)));
   await db.insert(t.auditLog).values({ entityId: entity.id, userId: user.id, tableName: "customer_sites", recordId: siteId, action: "delete" });
   revalidatePath(`/sell/customers/${customerId}`);
+}
+
+export type DeleteResult = { ok?: string; error?: string; gone?: boolean };
+
+/**
+ * Deletes a customer (after the two-step confirmation on the customer page). A customer with no history is erased;
+ * one with past orders, returns or Katana history is marked deleted instead, so those records keep their customer.
+ * Refused while there's unfinished business (open quotes/orders, unpaid invoices, returns in progress).
+ */
+export async function deleteCustomer(id: string): Promise<DeleteResult> {
+  try {
+    const { user, entity } = await context();
+    const c = await ownCustomer(entity.id, id);
+    if (c.deletedAt) return { error: `${c.name} is already deleted.` };
+    const { blockers, hasHistory } = await customerDeleteCheck(c.id);
+    if (blockers.length) return { error: `${c.name} can't be deleted yet: ${blockers.join("; ")}.` };
+    await db.transaction(async (tx) => {
+      if (hasHistory) {
+        await tx.update(t.customers).set({ deletedAt: new Date(), deletedBy: user.id, active: false }).where(eq(t.customers.id, c.id));
+      } else {
+        await tx.delete(t.customers).where(eq(t.customers.id, c.id)); // delivery sites go with it (cascade)
+      }
+      await tx.insert(t.auditLog).values({
+        entityId: entity.id,
+        userId: user.id,
+        tableName: "customers",
+        recordId: c.id,
+        action: hasHistory ? "delete_keep_history" : "delete",
+        changes: { name: c.name },
+      });
+    });
+    revalidatePath("/sell/customers");
+    return hasHistory ? { ok: `${c.name} deleted. Their past orders are kept and still show their name.` } : { ok: `${c.name} deleted.`, gone: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Couldn't delete the customer." };
+  }
+}
+
+/** Brings back a customer deleted by mistake (as inactive; tick Active on Edit to use them again). */
+export async function restoreCustomer(id: string): Promise<DeleteResult> {
+  try {
+    const { user, entity } = await context();
+    const c = await ownCustomer(entity.id, id);
+    if (!c.deletedAt) return { ok: "Not deleted." };
+    await db.update(t.customers).set({ deletedAt: null, deletedBy: null }).where(eq(t.customers.id, c.id));
+    await db.insert(t.auditLog).values({ entityId: entity.id, userId: user.id, tableName: "customers", recordId: c.id, action: "restore", changes: { name: c.name } });
+    revalidatePath("/sell/customers");
+    revalidatePath(`/sell/customers/${c.id}`);
+    return { ok: `${c.name} restored (inactive). Edit them and tick Active to use them on orders again.` };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Couldn't restore the customer." };
+  }
 }

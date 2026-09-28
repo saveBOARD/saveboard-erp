@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db, t } from "@/db";
 import { priceListsData } from "@/lib/queries/price-lists";
 
@@ -44,7 +44,9 @@ export async function editorData(entityId: string, keepCustomerIds: string[] = [
         and(
           eq(t.customers.entityId, entityId),
           // Inactive customers are hidden from the order screens, except the one this document is for.
-          keepCustomerIds.length ? or(eq(t.customers.active, true), inArray(t.customers.id, keepCustomerIds)) : eq(t.customers.active, true),
+          keepCustomerIds.length
+            ? or(and(eq(t.customers.active, true), isNull(t.customers.deletedAt)), inArray(t.customers.id, keepCustomerIds))
+            : and(eq(t.customers.active, true), isNull(t.customers.deletedAt)),
         ),
       )
       .orderBy(asc(t.customers.name)),

@@ -4,10 +4,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CustomerSites } from "@/components/customer-sites";
+import { DeleteCustomer } from "@/components/delete-customer";
 import { DataTable, type Column } from "@/components/data-table";
 import { ORDER_STATUS } from "@/components/order-view";
 import { db, t } from "@/db";
 import { getEntityContext } from "@/lib/dal";
+import { entityDay } from "@/lib/dates";
+import { customerDeleteCheck } from "@/lib/queries/customer-delete";
 import { entityToday } from "@/lib/queries/stock-items";
 
 export const metadata: Metadata = { title: "Customer · saveBOARD ERP" };
@@ -30,7 +33,7 @@ export default async function CustomerPage(props: PageProps<"/sell/customers/[id
   const [c] = await db.select().from(t.customers).where(and(eq(t.customers.id, id), eq(t.customers.entityId, entity.id)));
   if (!c) notFound();
 
-  const [sites, orders, [priceList]] = await Promise.all([
+  const [sites, orders, [priceList], deleteCheck] = await Promise.all([
     db.select().from(t.customerSites).where(eq(t.customerSites.customerId, id)).orderBy(desc(t.customerSites.isDefault), asc(t.customerSites.name)),
     db
       .select({
@@ -53,6 +56,7 @@ export default async function CustomerPage(props: PageProps<"/sell/customers/[id
       .select({ id: t.priceLists.id, name: t.priceLists.name })
       .from(t.priceLists)
       .where(c.priceListId ? eq(t.priceLists.id, c.priceListId) : and(eq(t.priceLists.entityId, entity.id), eq(t.priceLists.isDefault, true))),
+    customerDeleteCheck(id),
   ]);
 
   const toEntity = (o: (typeof orders)[number]) => Number(o.total) * Number(o.fxRate);
@@ -86,18 +90,26 @@ export default async function CustomerPage(props: PageProps<"/sell/customers/[id
           <div>
             <div className="text-xs uppercase tracking-wide text-muted">Customer {c.code && `· ${c.code}`}</div>
             <h1 className="text-2xl font-medium">{c.name}</h1>
-            {!c.active && <span className="text-sm text-bad">Inactive</span>}
+            {c.deletedAt ? (
+              <span className="text-sm text-bad">Deleted {entityDay(c.deletedAt, entity.id)}: hidden from customer lists and order screens (Restore at the bottom of the page)</span>
+            ) : (
+              !c.active && <span className="text-sm text-bad">Inactive</span>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             <Link href={`/sell/customers/${id}/edit`} className="btn-secondary">
               <Pencil className="h-4 w-4" /> Edit
             </Link>
+            {!c.deletedAt && (
+              <>
             <Link href={`/sell/quotes/new?customer=${id}`} className="btn-secondary">
               <Plus className="h-4 w-4" /> Quote
             </Link>
             <Link href={`/sell/orders/new?customer=${id}`} className="btn-primary">
               <Plus className="h-4 w-4" /> Sales order
             </Link>
+              </>
+            )}
           </div>
         </div>
         {c.creditHold && (
@@ -163,7 +175,11 @@ export default async function CustomerPage(props: PageProps<"/sell/customers/[id
           exportName={`customer-orders-${(c.code ?? c.name).replace(/\W+/g, "-")}`}
           noun="quotes & orders"
         />
-        <p className="text-xs text-muted">Katana order history (completed orders before the switch) is still in the Excel workbook history sheets.</p>
+        <p className="text-xs text-muted">Includes completed Katana orders (imported as Closed).</p>
+      </section>
+
+      <section className="no-print grid gap-2 border-t border-line pt-4">
+        <DeleteCustomer id={id} name={c.name} deleted={!!c.deletedAt} blockers={deleteCheck.blockers} hasHistory={deleteCheck.hasHistory} />
       </section>
     </div>
   );

@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull } from "drizzle-orm";
 import type { Metadata } from "next";
 import { DataTable, type Column } from "@/components/data-table";
 import { ListHeader } from "@/components/list-header";
@@ -9,7 +9,9 @@ export const metadata: Metadata = { title: "Customers · saveBOARD ERP" };
 
 export default async function CustomersPage(props: PageProps<"/sell/customers">) {
   const { entity } = await getEntityContext();
-  const inactive = (await props.searchParams).tab === "inactive";
+  const tab = (await props.searchParams).tab;
+  const deleted = tab === "deleted";
+  const inactive = tab === "inactive";
   const c = t.customers;
   const rows = await db
     .select({
@@ -29,7 +31,7 @@ export default async function CustomersPage(props: PageProps<"/sell/customers">)
     })
     .from(c)
     .leftJoin(t.priceLists, eq(t.priceLists.id, c.priceListId))
-    .where(and(eq(c.entityId, entity.id), eq(c.active, !inactive)))
+    .where(and(eq(c.entityId, entity.id), deleted ? isNotNull(c.deletedAt) : and(isNull(c.deletedAt), eq(c.active, !inactive))))
     .orderBy(asc(c.name));
 
   const columns: Column[] = [
@@ -51,12 +53,19 @@ export default async function CustomersPage(props: PageProps<"/sell/customers">)
     <>
       <ListHeader
         tabs={[
-          { label: "Active", href: "/sell/customers", active: !inactive },
+          { label: "Active", href: "/sell/customers", active: !inactive && !deleted },
           { label: "Inactive", href: "/sell/customers?tab=inactive", active: inactive },
+          { label: "Deleted", href: "/sell/customers?tab=deleted", active: deleted },
         ]}
         newLabel="Customer"
         newHref="/sell/customers/new"
-        note={inactive ? "Hidden from quotes and orders. Edit a customer and tick Active to use them again." : undefined}
+        note={
+          deleted
+            ? "Deleted customers: kept only so their past orders keep a name. Open one to restore it."
+            : inactive
+              ? "Hidden from quotes and orders. Edit a customer and tick Active to use them again."
+              : undefined
+        }
       />
       <DataTable
         columns={columns}
