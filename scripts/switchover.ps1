@@ -70,7 +70,11 @@ foreach ($e in $Entities) {
     Run @("tsx", "scripts/import-katana-done.ts", $e, $f.history.FullName)
     Run @("tsx", "scripts/import-sales-history.ts", $e, $f.history.FullName)
   }
-  if ($f.mos -and $f.moIng) { Run @("tsx", "scripts/import-katana-mos.ts", $e, $f.mos.FullName, $f.moIng.FullName) }
+  if ($f.mos) {
+    $mo = @("tsx", "scripts/import-katana-mos.ts", $e, $f.mos.FullName)
+    if ($f.moIng) { $mo += $f.moIng.FullName }
+    Run $mo
+  }
 }
 Run @("tsx", "scripts/expire-quotes.ts", "365")
 Write-Host "Switchover load finished ($Target). Now check stock value and open orders against Katana." -ForegroundColor Green

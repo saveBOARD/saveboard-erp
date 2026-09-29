@@ -26,8 +26,8 @@ import { createDb } from "../src/db/client";
 import { entities, manufacturingOrders, moMaterials, numberSequences, products, recipeLines } from "../src/db/schema";
 
 const [entityId, moFile, ingFile] = process.argv.slice(2).filter((a) => !a.startsWith("--"));
-if (!entityId || !moFile || !ingFile) {
-  console.error('Usage: npx tsx scripts/import-katana-mos.ts <NZ|AUS> "<ManufacturingOrders export>" "<ManufacturingOrdersIngredients export>" [--prod]');
+if (!entityId || !moFile) {
+  console.error('Usage: npx tsx scripts/import-katana-mos.ts <NZ|AUS> "<ManufacturingOrders export>" ["<ManufacturingOrdersIngredients export>"] [--prod]');
   process.exit(1);
 }
 
@@ -70,7 +70,8 @@ async function readSheet(file: string) {
 }
 
 async function main() {
-  const [moRows, ingRows] = await Promise.all([readSheet(moFile), readSheet(ingFile)]);
+  // Without the ingredients export the MOs load without materials and no recipes are built.
+  const [moRows, ingRows] = await Promise.all([readSheet(moFile), ingFile ? readSheet(ingFile) : Promise.resolve([] as Record<string, Cell>[])]);
   if (!moRows.length || !("MO #" in moRows[0])) throw new Error(`${moFile}: not a Katana manufacturing orders export.`);
 
   const db = createDb();
@@ -128,7 +129,7 @@ async function main() {
   const unknownProducts = new Map<string, number>();
   let unknownIngredients = 0;
   let skippedExisting = 0;
-  let maxMo = 0;
+  const recentMo: number[] = [];
   // For recipes: latest completed MO per product (by done date), with its ingredient rows.
   const latest = new Map<string, { done: string; qty: number; ing: Record<string, Cell>[] }>();
 
@@ -139,7 +140,7 @@ async function main() {
     if (!katanaNo || !sku) continue;
     const done = isoDate(r["Done date"]) ?? isoDate(r["Prod. deadline"]) ?? "2021-01-01";
     const m = katanaNo.match(/^MO-(\d+)\b/);
-    if (m && done >= sixMonthsAgo) maxMo = Math.max(maxMo, Number(m[1]));
+    if (m && done >= sixMonthsAgo) recentMo.push(Number(m[1]));
     const product = productBySku.get(sku.toLowerCase());
     const ing = ingByKey.get(`${katanaNo}|${sku.toLowerCase()}`) ?? [];
     const plannedQty = num(r["Planned quantity"]);
@@ -216,6 +217,12 @@ async function main() {
     [...lines].forEach(([ingredientId, l], i) => recipes.push({ productId, ingredientId, qtyPerUnit: String(r4(l.qty)), note: l.note, sortOrder: i }));
   }
 
+  // Ignore mistyped numbers (e.g. "MO-666250861"): nothing more than 1,000 above the typical recent number.
+  const sorted = [...recentMo].sort((a, b) => a - b);
+  const median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
+  const maxMo = Math.max(0, ...sorted.filter((n) => n <= median + 1000));
+  const ignored = sorted.filter((n) => n > median + 1000);
+
   await db.transaction(async (tx) => {
     for (let i = 0; i < mos.length; i += 200) await tx.insert(manufacturingOrders).values(mos.slice(i, i + 200));
     for (let i = 0; i < mats.length; i += 500) await tx.insert(moMaterials).values(mats.slice(i, i + 500));
@@ -240,6 +247,7 @@ async function main() {
   );
   if (unknownProducts.size)
     console.log(`  Skipped: ${[...unknownProducts.values()].reduce((a, b) => a + b, 0)} MOs for ${unknownProducts.size} products no longer in the product list (${[...unknownProducts.keys()].slice(0, 12).join(", ")}${unknownProducts.size > 12 ? "…" : ""})`);
+  if (ignored.length) console.log(`  Ignored for numbering (mistyped?): ${ignored.map((n) => `MO-${n}`).join(", ")}`);
   if (unknownIngredients) console.log(`  Skipped: ${unknownIngredients} ingredient lines whose SKU isn't in the product list.`);
   process.exit(0);
 }
