@@ -5,6 +5,8 @@
 #   "<NZ|AUS> SalesOrders-*.xlsx"             Sell > Quotes > download
 #   "<NZ|AUS> OpenSalesOrders-*.xlsx"         Sell > Sales orders > Open > download
 #   "<NZ|AUS> DoneSalesOrders-*.xlsx"         Sell > Sales orders > Done > download   (optional: completed orders + sales history)
+#   "<NZ|AUS> ManufacturingOrders-*.xlsx" + "<NZ|AUS> ManufacturingOrdersIngredients-*.xlsx"
+#                                             Make > Manufacturing orders > Done (both downloads)   (optional: done MOs + recipes)
 #
 #   powershell -ExecutionPolicy Bypass -File scripts/switchover.ps1                 # rehearsal on the LOCAL database
 #   powershell -ExecutionPolicy Bypass -File scripts/switchover.ps1 -Target prod    # the real thing (Supabase)
@@ -41,11 +43,13 @@ foreach ($e in $Entities) {
     quotes    = Newest "$e SalesOrders-*.xlsx"
     open      = Newest "$e OpenSalesOrders-*.xlsx"
     history   = Newest "$e DoneSalesOrders-*.xlsx"
+    mos       = Newest "$e ManufacturingOrders-*.xlsx"
+    moIng     = Newest "$e ManufacturingOrdersIngredients-*.xlsx"
   }
   foreach ($k in @("inventory", "quotes", "open")) { if (-not $files[$k]) { throw "$e : no '$k' export found in $folder" } }
   $plan[$e] = $files
   Write-Host "$e files:" -ForegroundColor Yellow
-  foreach ($k in @("customers", "inventory", "quotes", "open", "history")) {
+  foreach ($k in @("customers", "inventory", "quotes", "open", "history", "mos", "moIng")) {
     $f = $files[$k]
     if ($f) { Write-Host ("  {0,-10} {1}  (saved {2:dd/MM/yyyy HH:mm})" -f $k, $f.Name, $f.LastWriteTime) } else { Write-Host "  $k  (none - skipped)" }
   }
@@ -66,6 +70,7 @@ foreach ($e in $Entities) {
     Run @("tsx", "scripts/import-katana-done.ts", $e, $f.history.FullName)
     Run @("tsx", "scripts/import-sales-history.ts", $e, $f.history.FullName)
   }
+  if ($f.mos -and $f.moIng) { Run @("tsx", "scripts/import-katana-mos.ts", $e, $f.mos.FullName, $f.moIng.FullName) }
 }
 Run @("tsx", "scripts/expire-quotes.ts", "365")
 Write-Host "Switchover load finished ($Target). Now check stock value and open orders against Katana." -ForegroundColor Green
