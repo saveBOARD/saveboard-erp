@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import type { Metadata } from "next";
 import { InvoicingList, type InvoiceRow, type InvoicingMode } from "@/components/invoicing-list";
 import { ListHeader } from "@/components/list-header";
@@ -38,7 +38,14 @@ async function orderRows(entityId: string, entityCurrency: string, invoiced: boo
     })
     .from(o)
     .innerJoin(t.customers, eq(t.customers.id, o.customerId))
-    .where(and(eq(o.entityId, entityId), eq(o.status, invoiced ? "invoiced" : "shipped")))
+    .where(
+      and(
+        eq(o.entityId, entityId),
+        invoiced
+          ? or(eq(o.status, "invoiced"), and(inArray(o.status, ["open", "picked"]), isNotNull(o.invoicedOn)))
+          : and(eq(o.status, "shipped"), isNull(o.invoicedOn)),
+      ),
+    )
     .orderBy(invoiced ? desc(o.invoicedOn) : o.number, desc(o.number))
     .limit(invoiced ? 300 : 1000);
   return rows.map((r) => ({
@@ -48,7 +55,7 @@ async function orderRows(entityId: string, entityCurrency: string, invoiced: boo
     title: r.title,
     customer: r.customer,
     reference: r.reference,
-    eventOn: r.shippedOn,
+    eventOn: r.shippedOn ?? (invoiced ? "Not shipped yet" : null),
     invoicedOn: r.invoicedOn,
     dueOn: r.dueOn,
     total: Number(r.subtotal),

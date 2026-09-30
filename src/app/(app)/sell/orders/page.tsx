@@ -36,6 +36,7 @@ export default async function SalesOrdersPage(props: PageProps<"/sell/orders">) 
         deliveryDeadline: o.deliveryDeadline,
         overdue: sql<boolean>`${o.deliveryDeadline} < current_date`,
         status: o.status,
+        invoicedOn: o.invoicedOn,
       })
       .from(o)
       .innerJoin(t.customers, eq(t.customers.id, o.customerId))
@@ -68,6 +69,7 @@ export default async function SalesOrdersPage(props: PageProps<"/sell/orders">) 
       : []),
     { key: "status", label: "Status", tones: { Open: "pending", Picked: "pending", Shipped: "ok", Invoiced: "ok", Closed: "ok", Cancelled: "bad" } },
     { key: "delivery", label: "Delivery", tones: { "Not shipped": "pending", "Partially shipped": "pending", Shipped: "ok" } },
+    ...(tab.value === "open" ? [{ key: "invoice", label: "Invoice", tones: { "Not invoiced": "pending", Invoiced: "ok" } } as Column] : []),
     { key: "customerReference", label: "Customer reference #" },
     { key: "overdueLabel", label: "Overdue", hidden: true },
   ];
@@ -91,6 +93,7 @@ export default async function SalesOrdersPage(props: PageProps<"/sell/orders">) 
           salesItems: AVAILABILITY_LABEL[position.orderAvailability.get(r.id) ?? "not_tracked"],
           status: ORDER_STATUS[r.status].label,
           delivery: delivery.get(r.id) ?? null,
+          invoice: r.invoicedOn ? "Invoiced" : "Not invoiced",
           customerReference: r.customerReference,
           overdueLabel: r.overdue && tab.value === "open" ? "Overdue" : null,
         }))}

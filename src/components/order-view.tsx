@@ -93,6 +93,11 @@ export function OrderView({
               {o.title && <span className="text-muted"> / {o.title}</span>}
             </h1>
           </div>
+          {kind === "order" && o.invoicedOn && ["open", "picked", "shipped"].includes(o.status) && (
+            <span className="rounded bg-ok px-3 py-1.5 text-sm text-white" title="Invoiced before shipping">
+              Invoiced {o.invoicedOn}
+            </span>
+          )}
           <span className={clsx("rounded px-4 py-1.5 text-sm font-medium", status.className)}>{status.label}</span>
         </div>
         {actions}

@@ -7,7 +7,8 @@ import { db, t } from "@/db";
 import { assertEntityAccess, getEntityContext } from "@/lib/dal";
 import { dueDate, xeroInvoiceCsv } from "@/lib/invoicing/xero";
 import { creditNotes, invoiceOrders } from "@/lib/queries/invoicing";
-import { xeroApi } from "@/lib/xero/client";
+import { getConnection, xeroApi } from "@/lib/xero/client";
+import { entityToday } from "@/lib/queries/stock-items";
 import { pushCreditNotes, pushInvoices, type PushResult } from "@/lib/xero/sync";
 
 export type CsvResult = { ok?: true; error?: string; csv?: string; filename?: string; message?: string };
@@ -28,27 +29,34 @@ function revalidate() {
 
 const filename = (entityId: string, date: string) => `xero-invoices-${entityId}-${date}.csv`;
 
-/** Marks shipped orders Invoiced (invoice date + due date from each customer's terms). Returns an error message, or null. */
+/**
+ * Invoices orders (invoice date + due date from each customer's terms). Returns an error message, or null.
+ * Shipped orders become Invoiced. Open / picked orders can be invoiced up front (cash, COD, custom work paid before
+ * production): they keep their status, and become Invoiced when fully shipped.
+ */
 async function markInvoiced(entityId: string, userId: string, ids: string[], invoiceDate: string, via: "xero_csv" | "xero_api") {
   const rows = await db
-    .select({ id: t.salesOrders.id, number: t.salesOrders.number, status: t.salesOrders.status, terms: t.customers.paymentTerms })
+    .select({ id: t.salesOrders.id, number: t.salesOrders.number, status: t.salesOrders.status, invoicedOn: t.salesOrders.invoicedOn, terms: t.customers.paymentTerms })
     .from(t.salesOrders)
     .innerJoin(t.customers, eq(t.customers.id, t.salesOrders.customerId))
     .where(and(eq(t.salesOrders.entityId, entityId), inArray(t.salesOrders.id, ids)));
   if (rows.length !== ids.length) return "One of the orders isn't in this entity.";
-  const notShipped = rows.filter((r) => r.status !== "shipped");
-  if (notShipped.length) return `Only fully shipped orders can be invoiced: ${notShipped.map((r) => `${r.number} is ${r.status}`).join(", ")}.`;
+  const already = rows.filter((r) => r.invoicedOn || r.status === "invoiced" || r.status === "closed");
+  if (already.length) return `Already invoiced: ${already.map((r) => r.number).join(", ")}.`;
+  const bad = rows.filter((r) => !["open", "picked", "shipped"].includes(r.status));
+  if (bad.length) return `These can't be invoiced: ${bad.map((r) => `${r.number} is ${r.status}`).join(", ")}.`;
   await db.transaction(async (tx) => {
     for (const r of rows) {
       const due = dueDate(invoiceDate, r.terms);
-      await tx.update(t.salesOrders).set({ status: "invoiced", invoicedOn: invoiceDate, invoiceDueOn: due }).where(eq(t.salesOrders.id, r.id));
+      const status = r.status === "shipped" ? ("invoiced" as const) : r.status; // unshipped: invoiced up front, status unchanged
+      await tx.update(t.salesOrders).set({ status, invoicedOn: invoiceDate, invoiceDueOn: due }).where(eq(t.salesOrders.id, r.id));
       await tx.insert(t.auditLog).values({
         entityId,
         userId,
         tableName: "sales_orders",
         recordId: r.id,
         action: "invoiced",
-        changes: { number: r.number, status: { from: "shipped", to: "invoiced" }, invoicedOn: invoiceDate, dueOn: due, via },
+        changes: { number: r.number, status: { from: r.status, to: status }, invoicedOn: invoiceDate, dueOn: due, via, upFront: r.status !== "shipped" },
       });
     }
   });
@@ -136,6 +144,28 @@ export async function sendCreditsToXero(returnIds: string[]): Promise<CsvResult>
     return r.failed.length ? { error: pushMessage("credit notes", r) } : { ok: true, message: pushMessage("credit notes", r) };
   } catch (e) {
     return { error: errorText(e, "Couldn't send to Xero.") };
+  }
+}
+
+/** "Invoice now" on a sales order (any time before it's invoiced): today's date; to Xero when connected, else the import file. */
+export async function invoiceOrderNow(orderId: string): Promise<CsvResult> {
+  try {
+    const { user, entity } = await context();
+    const ids = Ids.parse([orderId]);
+    const today = entityToday(entity.id);
+    const err = await markInvoiced(entity.id, user.id, ids, today, (await getConnection(entity.id)) ? "xero_api" : "xero_csv");
+    if (err) return { error: err };
+    revalidate();
+    revalidatePath(`/sell/orders/${orderId}`);
+    if (await getConnection(entity.id)) {
+      const r = await pushInvoices(entity.id, ids, user.id);
+      revalidatePath(`/sell/orders/${orderId}`);
+      return r.failed.length ? { error: `Invoiced. ${pushMessage("invoices", r)} Retry from Sell → Invoicing → Invoiced.` } : { ok: true, message: pushMessage("invoices", r) };
+    }
+    const csv = xeroInvoiceCsv(entity.id, await invoiceOrders(entity.id, ids));
+    return { ok: true, csv, filename: filename(entity.id, today), message: "Invoiced. Import the downloaded file into Xero." };
+  } catch (e) {
+    return { error: errorText(e, "Couldn't invoice the order.") };
   }
 }
 
@@ -236,7 +266,8 @@ export async function undoInvoiced(orderId: string): Promise<CsvResult> {
       .from(t.salesOrders)
       .where(and(eq(t.salesOrders.id, z.string().uuid().parse(orderId)), eq(t.salesOrders.entityId, entity.id)));
     if (!o) return { error: "Order not found." };
-    if (o.status !== "invoiced") return { error: `${o.number} isn't invoiced.` };
+    if (!o.invoicedOn) return { error: `${o.number} isn't invoiced.` };
+    if (!["invoiced", "open", "picked"].includes(o.status)) return { error: `${o.number} is ${o.status}, so its invoice can't be undone here.` };
     if (o.xeroId) {
       const { Invoices } = await xeroApi<{ Invoices: { Status: string }[] }>(entity.id, "GET", `/Invoices/${o.xeroId}`);
       const status = Invoices[0]?.Status;
@@ -245,7 +276,7 @@ export async function undoInvoiced(orderId: string): Promise<CsvResult> {
     await db.transaction(async (tx) => {
       await tx
         .update(t.salesOrders)
-        .set({ status: "shipped", invoicedOn: null, invoiceDueOn: null, xeroInvoiceId: null, xeroStatus: null, xeroAmountDue: null, xeroAmountPaid: null, xeroSyncedAt: null })
+        .set({ status: o.status === "invoiced" ? "shipped" : o.status, invoicedOn: null, invoiceDueOn: null, xeroInvoiceId: null, xeroStatus: null, xeroAmountDue: null, xeroAmountPaid: null, xeroSyncedAt: null })
         .where(eq(t.salesOrders.id, orderId));
       await tx.insert(t.auditLog).values({
         entityId: entity.id,
@@ -253,7 +284,7 @@ export async function undoInvoiced(orderId: string): Promise<CsvResult> {
         tableName: "sales_orders",
         recordId: orderId,
         action: "undo_invoiced",
-        changes: { number: o.number, status: { from: "invoiced", to: "shipped" }, invoicedOn: o.invoicedOn },
+        changes: { number: o.number, status: { from: o.status, to: o.status === "invoiced" ? "shipped" : o.status }, invoicedOn: o.invoicedOn },
       });
     });
     revalidate();

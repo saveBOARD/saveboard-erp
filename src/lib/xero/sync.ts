@@ -87,7 +87,7 @@ export async function pushInvoices(entityId: string, orderIds: string[], userId?
   const orders = await db
     .select()
     .from(t.salesOrders)
-    .where(and(eq(t.salesOrders.entityId, entityId), inArray(t.salesOrders.id, orderIds), eq(t.salesOrders.status, "invoiced")));
+    .where(and(eq(t.salesOrders.entityId, entityId), inArray(t.salesOrders.id, orderIds), isNotNull(t.salesOrders.invoicedOn)));
   for (const o of orders) {
     if (o.xeroInvoiceId) continue;
     try {

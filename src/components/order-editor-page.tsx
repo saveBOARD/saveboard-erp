@@ -16,6 +16,7 @@ export async function OrderEditorPage({ kind, id, presetCustomerId }: { kind: "q
     const isQuote = o.status === "quote";
     if (isQuote !== (kind === "quote")) redirect(`/sell/${isQuote ? "quotes" : "orders"}/${id}/edit`);
     if (!["quote", "open", "picked"].includes(o.status)) redirect(`/sell/orders/${id}`);
+    if (o.invoicedOn) redirect(`/sell/orders/${id}`); // invoiced up front: undo the invoice before editing
     initial = {
       id: o.id,
       number: o.number,

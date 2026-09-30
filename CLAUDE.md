@@ -53,6 +53,10 @@ server actions); the browser never queries tables directly.
 - **Cost and margin never appear** on picking slips, packing slips or work orders.
 - **Exports are zero-rated**: goods on export orders carry 0% GST; only freight is charged GST (Paul, 27/9/26).
 - One sales order = one invoice (no split/progress invoicing). Invoicing is manual, not automatic on Shipped.
+- An order can be invoiced UP FRONT, before it's picked/made/shipped (cash, COD, custom work paid before production;
+  Paul 30/9/26): "Invoice now" on an open/picked order sets invoiced_on (and sends it to Xero) without changing its
+  status; it can't then be edited or cancelled until the invoice is undone; when fully shipped it goes straight to
+  Invoiced (or Closed if Xero already shows it paid). `invoiced_on` is the source of truth for "has an invoice".
 - Sales order status: Open → Picked → Shipped → Invoiced → Closed; partial shipments allowed; orders editable after
   confirmation with an audit trail. Stock shortfalls are flagged for a person — never auto-create POs/MOs.
 - Credit limit / credit hold is checked when an order is confirmed.

@@ -48,6 +48,7 @@ export default async function CustomerPage(props: PageProps<"/sell/customers/[id
         customerReference: t.salesOrders.customerReference,
         xeroAmountDue: t.salesOrders.xeroAmountDue,
         invoiceDueOn: t.salesOrders.invoiceDueOn,
+        invoicedOn: t.salesOrders.invoicedOn,
       })
       .from(t.salesOrders)
       .where(eq(t.salesOrders.customerId, id))
@@ -60,10 +61,11 @@ export default async function CustomerPage(props: PageProps<"/sell/customers/[id
   ]);
 
   const toEntity = (o: (typeof orders)[number]) => Number(o.total) * Number(o.fxRate);
-  const openBalance = orders.filter((o) => ["open", "picked", "shipped"].includes(o.status)).reduce((s, o) => s + toEntity(o), 0);
+  // Orders not yet invoiced (an order invoiced up front counts under "owing" instead, so it isn't counted twice).
+  const openBalance = orders.filter((o) => ["open", "picked", "shipped"].includes(o.status) && !o.invoicedOn).reduce((s, o) => s + toEntity(o), 0);
   // Unpaid invoices, as last read back from Xero (only for invoices sent through the live connection).
   const today = entityToday(entity.id);
-  const unpaid = orders.filter((o) => o.status === "invoiced" && Number(o.xeroAmountDue ?? 0) > 0);
+  const unpaid = orders.filter((o) => ["open", "picked", "shipped", "invoiced"].includes(o.status) && o.invoicedOn && Number(o.xeroAmountDue ?? 0) > 0);
   const owing = unpaid.reduce((s, o) => s + Number(o.xeroAmountDue) * Number(o.fxRate), 0);
   const overdue = unpaid.filter((o) => o.invoiceDueOn && o.invoiceDueOn < today).reduce((s, o) => s + Number(o.xeroAmountDue) * Number(o.fxRate), 0);
   const limit = c.creditLimit === null ? null : Number(c.creditLimit);

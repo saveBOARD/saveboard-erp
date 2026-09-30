@@ -146,6 +146,8 @@ export async function saveOrder(input: OrderInput): Promise<ActionResult> {
         if (!existing) throw new Error("This order no longer exists.");
         if (!(EDITABLE as readonly string[]).includes(existing.status))
           throw new Error(`A ${existing.status} order can't be edited.`);
+        if (existing.invoicedOn)
+          throw new Error(`${existing.number} has already been invoiced (${existing.invoicedOn}). Undo the invoice first (Sell → Invoicing → Invoiced; void it in Xero first if it was sent), then edit.`);
         await tx.update(t.salesOrders).set(header).where(eq(t.salesOrders.id, v.id));
         // Update lines in place (shipments point at them); add new ones; remove dropped ones unless shipped.
         const existingLines = await tx.select().from(t.orderLines).where(eq(t.orderLines.orderId, v.id));
@@ -287,6 +289,8 @@ export async function setOrderStatus(id: string, to: OrderStatus): Promise<Actio
     const { user, entity, order } = await loadForAction(id);
     if (!(TRANSITIONS[order.status] ?? []).includes(to))
       return { error: `A ${order.status} order can't be moved to ${to}.` };
+    if (to === "cancelled" && order.invoicedOn)
+      return { error: `${order.number} has been invoiced. Undo the invoice first (void it in Xero if it was sent), then cancel the order.` };
     if (to === "cancelled") {
       const [live] = await db
         .select({ n: sql<number>`count(*)::int` })
@@ -406,14 +410,17 @@ export async function createShipment(input: ShipmentInput): Promise<ActionResult
       if (moves.length) await tx.insert(t.stockMovements).values(moves);
 
       const allSent = lines.every((x) => (shipped.get(x.l.id) ?? 0) + (sending.get(x.l.id) ?? 0) >= Number(x.l.qty) - 1e-9);
-      if (allSent) await tx.update(t.salesOrders).set({ status: "shipped" }).where(eq(t.salesOrders.id, v.orderId));
+      // Fully shipped: Shipped, or straight to Invoiced when it was invoiced up front (cash / COD / custom orders).
+      // (and already paid in Xero -> Closed, since the morning payment check only looks at unpaid invoices)
+      const done = !order.invoicedOn ? ("shipped" as const) : order.xeroStatus === "PAID" ? ("closed" as const) : ("invoiced" as const);
+      if (allSent) await tx.update(t.salesOrders).set({ status: done }).where(eq(t.salesOrders.id, v.orderId));
       await tx.insert(t.auditLog).values({
         entityId: entity.id,
         userId: user.id,
         tableName: "shipments",
         recordId: shipment.id,
         action: "create",
-        changes: { shipment: ref, lines: v.lines, orderStatus: allSent ? "shipped" : order.status },
+        changes: { shipment: ref, lines: v.lines, orderStatus: allSent ? done : order.status },
       });
     });
     revalidateSales(v.orderId);

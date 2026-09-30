@@ -46,7 +46,7 @@ export default async function SalesOrderPage(props: PageProps<"/sell/orders/[id]
         availability={lineAvailability}
         shipped={shipped}
         backHref="/sell/orders"
-        actions={<OrderActions id={id} kind="order" status={found.order.status} quoteStatus={found.order.quoteStatus} canReturn={canReturn} />}
+        actions={<OrderActions id={id} kind="order" status={found.order.status} quoteStatus={found.order.quoteStatus} canReturn={canReturn} invoicedOn={found.order.invoicedOn} />}
       />
       <div className="mx-auto mt-4 grid max-w-6xl gap-4">
         <ShipmentsPanel orderId={id} shipments={shipments} canReverse={["open", "picked", "shipped"].includes(found.order.status)} />
