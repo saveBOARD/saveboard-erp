@@ -404,15 +404,15 @@ export function OrderEditor({
       </section>
 
       <section className="overflow-x-auto rounded border border-line bg-surface">
-        <table className="w-full min-w-[900px] text-sm">
+        <table className="w-full min-w-[980px] text-sm">
           <thead>
             <tr className="text-left text-xs text-muted">
               <th className="border-b border-line px-2 py-2 font-normal">#</th>
               <th className="border-b border-line px-2 py-2 font-normal">Item (type a SKU or name, or free text)</th>
-              <th className="w-24 border-b border-line px-2 py-2 text-right font-normal">Quantity</th>
+              <th className="w-36 border-b border-line px-2 py-2 text-right font-normal">Quantity</th>
               <th className="w-28 border-b border-line px-2 py-2 text-right font-normal">Price per unit</th>
               <th className="w-20 border-b border-line px-2 py-2 text-right font-normal">Discount %</th>
-              <th className="w-20 border-b border-line px-2 py-2 text-right font-normal">GST %</th>
+              <th className="w-24 border-b border-line px-2 py-2 text-right font-normal">GST %</th>
               <th className="w-32 border-b border-line px-2 py-2 text-right font-normal">Total ex GST</th>
               <th className="w-10 border-b border-line" />
             </tr>
