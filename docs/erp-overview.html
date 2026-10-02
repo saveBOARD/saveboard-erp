@@ -1,0 +1,294 @@
+<title>saveBOARD ERP Web App Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a working document. Sticky contents rail on wide screens, one reading column, tables in their own scrollers. */
+:root {
+  --bg: #F5F7F4;
+  --surface: #FFFFFF;
+  --ink: #1B2420;
+  --muted: #5A6760;
+  --line: #DCE2DC;
+  --accent: #2F6F4E;
+  --accent-soft: #E6F0EA;
+  --nav: #0E2233;
+  --nav-ink: #E9EEF2;
+  --ok: #2E7D4F;
+  --ok-soft: #E3F1E8;
+  --warn: #9A6A00;
+  --warn-soft: #FFF4D6;
+  --crm: #3D5A9E;
+  --crm-soft: #E7ECF7;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #111714; --surface: #18201C; --ink: #E4EBE6; --muted: #9AA8A0; --line: #2B3631;
+    --accent: #6FBF92; --accent-soft: #1D2E25; --nav: #0A1824; --nav-ink: #DCE5EC;
+    --ok: #5FBF86; --ok-soft: #1B2C22; --warn: #E3B341; --warn-soft: #2C2614;
+    --crm: #93A9E0; --crm-soft: #1E2536;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111714; --surface: #18201C; --ink: #E4EBE6; --muted: #9AA8A0; --line: #2B3631;
+  --accent: #6FBF92; --accent-soft: #1D2E25; --nav: #0A1824; --nav-ink: #DCE5EC;
+  --ok: #5FBF86; --ok-soft: #1B2C22; --warn: #E3B341; --warn-soft: #2C2614;
+  --crm: #93A9E0; --crm-soft: #1E2536;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15.5px; line-height: 1.6; }
+.wrap { max-width: 1140px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 80px; display: grid; grid-template-columns: 1fr; gap: 40px; }
+@media (min-width: 1000px) { .wrap { grid-template-columns: 210px minmax(0, 1fr); } }
+nav.toc { display: none; }
+@media (min-width: 1000px) {
+  nav.toc { display: block; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; font-size: 13.5px; }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  nav.toc a { display: block; padding: 5px 10px; border-left: 2px solid var(--line); color: var(--muted); text-decoration: none; }
+  nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); border-left-color: var(--accent); outline: none; }
+  nav.toc .label { font-family: var(--display); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; padding-left: 12px; }
+}
+main { min-width: 0; display: grid; gap: 56px; }
+header.doc { display: grid; gap: 14px; border-bottom: 1px solid var(--line); padding-bottom: 28px; }
+.eyebrow { font-family: var(--display); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; line-height: 1.2; }
+h1 { font-size: clamp(28px, 4.2vw, 40px); font-weight: 700; letter-spacing: -.01em; }
+h2 { font-size: 23px; font-weight: 600; }
+h3 { font-size: 16.5px; font-weight: 600; }
+p { margin: 0; max-width: 70ch; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 22px; color: var(--muted); font-size: 13.5px; }
+.meta b { color: var(--ink); font-weight: 500; }
+.status { display: inline-block; padding: 2px 10px; border-radius: 999px; background: var(--ok-soft); color: var(--ok); font-size: 12.5px; font-weight: 600; }
+section { display: grid; gap: 18px; scroll-margin-top: 20px; min-width: 0; }
+section > .lede { color: var(--muted); }
+code, .mono { font-family: var(--mono); font-size: .88em; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+ul.plain { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 74ch; }
+.summary { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 22px 24px; display: grid; gap: 14px; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px 24px; }
+.fact { display: grid; gap: 2px; }
+.fact .k { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.fact .v { font-weight: 500; font-variant-numeric: tabular-nums; }
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--display); font-weight: 600; font-size: 12.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); background: var(--bg); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+td .mono { white-space: nowrap; }
+.owner { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; letter-spacing: .03em; white-space: nowrap; }
+.owner.erp { background: var(--accent-soft); color: var(--accent); }
+.owner.crm { background: var(--crm-soft); color: var(--crm); }
+.owner.both { background: var(--warn-soft); color: var(--warn); }
+.modules { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.module { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 6px; align-content: start; }
+.module h3 { font-size: 15px; }
+.module ul { margin: 0; padding-left: 18px; font-size: 14px; color: var(--muted); display: grid; gap: 2px; }
+.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13.5px; }
+.flow span { padding: 3px 10px; border-radius: 4px; background: var(--surface); border: 1px solid var(--line); white-space: nowrap; }
+.flow i { font-style: normal; color: var(--muted); }
+.note { background: var(--warn-soft); border-radius: 8px; padding: 12px 16px; font-size: 14px; max-width: 78ch; }
+.rec { background: var(--crm-soft); border-radius: 8px; padding: 14px 18px; display: grid; gap: 8px; max-width: 80ch; }
+.rec b { color: var(--crm); }
+pre.mermaid { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; margin: 0; overflow-x: auto; }
+ol.steps { margin: 0; padding-left: 22px; display: grid; gap: 8px; max-width: 76ch; }
+ol.steps li::marker { font-family: var(--mono); color: var(--accent); }
+</style>
+
+<div class="wrap">
+  <nav class="toc" aria-label="Sections">
+    <div class="label">Contents</div>
+    <ol>
+      <li><a href="#summary">Summary</a></li>
+      <li><a href="#live">What's live</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#customers">Customer data</a></li>
+      <li><a href="#sales">Quotes, orders &amp; invoices</a></li>
+      <li><a href="#rules">Rules a CRM must respect</a></li>
+      <li><a href="#crm">Linking a CRM</a></li>
+      <li><a href="#next">Open items</a></li>
+      <li><a href="#decisions">Decisions on record</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <header class="doc">
+      <div class="eyebrow">saveBOARD · Custom ERP</div>
+      <h1>ERP web app: plan and as-built overview</h1>
+      <p>What the saveBOARD ERP does today, how its customer and sales data is organised, and where a CRM should connect. Written as the reference for the CRM specification.</p>
+      <div class="meta">
+        <span><b>Owner</b> Paul Charteris</span>
+        <span><b>Updated</b> 2 October 2026</span>
+        <span class="status">Live · both entities trading in the app</span>
+      </div>
+    </header>
+
+    <section id="summary">
+      <h2>Summary</h2>
+      <div class="summary">
+        <p>The web app replaced Katana MRP on <b>30 September 2026</b>. Both companies now quote, sell, make, buy, ship and invoice in it. Katana's open orders, stock, customers and completed history were loaded on 29 September and checked item by item against Katana.</p>
+        <div class="facts">
+          <div class="fact"><span class="k">Address</span><span class="v mono">saveboard-erp.vercel.app</span></div>
+          <div class="fact"><span class="k">Entities</span><span class="v">NZ (NZD, 15% GST) · AUS (AUD, 10% GST)</span></div>
+          <div class="fact"><span class="k">History loaded</span><span class="v">1,876 completed orders · 2,466 completed MOs</span></div>
+          <div class="fact"><span class="k">Accounting</span><span class="v">Xero, one organisation per entity, live link</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="live">
+      <h2>What's live</h2>
+      <p class="lede">Navigation mirrors Katana. Every list has column filters, a totals row and Excel export.</p>
+      <div class="modules">
+        <div class="module"><h3>Sell</h3><ul><li>Quotes (PDF) and sales orders</li><li>Partial shipments with batch numbers, packing slips</li><li>Invoicing to Xero, including invoicing before shipping</li><li>Returns and credit notes</li><li>Price lists, customers and delivery sites</li></ul></div>
+        <div class="module"><h3>Make</h3><ul><li>Manufacturing orders from recipes</li><li>Completion consumes materials and adds stock</li><li>Production schedule by week</li><li>Work order print (no costs)</li></ul></div>
+        <div class="module"><h3>Buy</h3><ul><li>Suppliers</li><li>Purchase orders (draft, open, done)</li><li>Goods receipts with batches</li></ul></div>
+        <div class="module"><h3>Stock</h3><ul><li>Inventory: in stock, committed, expected, available</li><li>Stock adjustments and stocktakes</li><li>Batch trace</li></ul></div>
+        <div class="module"><h3>Items</h3><ul><li>Products, materials and services</li><li>Recipes (bills of materials)</li></ul></div>
+        <div class="module"><h3>Insights</h3><ul><li>Dashboard: sales month and year, open orders, to invoice, attention list</li><li>Sales by customer, by product, and every sales line</li></ul></div>
+      </div>
+    </section>
+
+    <section id="architecture">
+      <h2>Architecture</h2>
+      <p class="lede">A hosted web app with no servers to look after. The dashed box is the CRM this document prepares for.</p>
+<pre class="mermaid">
+flowchart LR
+  U["Staff browser<br/>desktop or tablet"] --> A["saveBOARD ERP<br/>Next.js on Vercel (Sydney)"]
+  A --> DB[("Postgres<br/>Supabase, Sydney")]
+  A -- "draft invoices,<br/>credit notes, contacts" --> XN["Xero NZ"]
+  A -- "draft invoices,<br/>credit notes, contacts" --> XA["Xero AUS"]
+  XN -. "status and payments,<br/>every morning" .-> A
+  XA -. "status and payments,<br/>every morning" .-> A
+  A --> XL["Excel export<br/>from every list"]
+  C["CRM<br/>(to be specified)"] -. "customers, quotes,<br/>orders, invoice status" .- A
+  style C stroke-dasharray: 5 5
+</pre>
+      <ul class="plain">
+        <li><b>Sign-in:</b> username and password managed in the app (Settings → Users). No single sign-on yet.</li>
+        <li><b>Entities:</b> every record belongs to NZ or AUS. Customers, products, stock, numbering and Xero never cross between them.</li>
+        <li><b>Audit:</b> every change is written to an audit log with the user and the before/after values.</li>
+        <li><b>Integration surface today:</b> the Xero link and Excel exports. The app has no public API yet; see <a href="#crm">Linking a CRM</a>.</li>
+      </ul>
+    </section>
+
+    <section id="customers">
+      <h2>Customer data</h2>
+      <p class="lede">The ERP's customer is the trading account: who is billed, on what terms and prices, and whether they can order. Each entity has its own customer list; a name is unique within an entity.</p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Field</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>ID</td><td>Internal UUID (stable, never shown to staff), plus an optional customer code.</td></tr>
+            <tr><td>Name</td><td>Unique per entity. Also the key used to match the customer to a Xero contact.</td></tr>
+            <tr><td>Billing address</td><td>Line 1, line 2, city, region or state, postcode, country.</td></tr>
+            <tr><td>Primary contact</td><td>One contact name, phone and email per customer. There is no separate list of people.</td></tr>
+            <tr><td>Business number</td><td>NZBN for NZ, ABN for AUS.</td></tr>
+            <tr><td>Payment terms</td><td>Free text, e.g. "7 days" or "20th of the month following". Used to set invoice due dates.</td></tr>
+            <tr><td>Price list</td><td>Standard (default) or a named list such as Trade High User, Merchant or IWD.</td></tr>
+            <tr><td>Credit limit, credit hold</td><td>Credit hold blocks new sales orders. Open orders plus unpaid Xero invoices are compared with the limit.</td></tr>
+            <tr><td>Active / deleted</td><td>Inactive customers are hidden from order screens. Deleted customers are hidden everywhere but keep their past orders.</td></tr>
+            <tr><td>Xero contact ID</td><td>Set when the customer is first invoiced through the live Xero link.</td></tr>
+            <tr><td>Delivery sites</td><td>Any number per customer: site name, address, site contact and phone, one default.</td></tr>
+            <tr><td>Notes</td><td>Free text.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">The original plan had a separate contacts list per customer. It wasn't built: the ERP keeps one primary contact plus a contact per delivery site. A list of people, their roles and their history is a natural job for the CRM.</p>
+    </section>
+
+    <section id="sales">
+      <h2>Quotes, orders and invoices</h2>
+      <p class="lede">A quote is a sales order in quote status, so it keeps its number (SO-1594, for example) when it becomes an order. Numbers continue from Katana, separately for each entity.</p>
+      <h3>Quote statuses</h3>
+      <div class="flow"><span>Draft</span><i>→</i><span>Sent</span><i>→</i><span>Accepted (converted to an order)</span><i>or</i><span>Declined</span><i>or</i><span>Expired</span></div>
+      <h3>Sales order statuses</h3>
+      <div class="flow"><span>Open</span><i>→</i><span>Picked</span><i>→</i><span>Shipped</span><i>→</i><span>Invoiced</span><i>→</i><span>Closed (paid in Xero)</span><i>or</i><span>Cancelled</span></div>
+      <ul class="plain">
+        <li><b>Invoicing before shipping:</b> an open or picked order can be invoiced up front (cash, COD, or custom work paid before production). It keeps its status, can't be edited until the invoice is undone, and becomes Invoiced when fully shipped.</li>
+        <li><b>One order, one invoice.</b> Invoices are numbered with the order number and created in Xero as drafts for approval. A paid invoice closes its order.</li>
+        <li><b>Returns</b> are numbered RET-… against a shipped order. Their credit notes go to Xero with the same number.</li>
+        <li><b>Stock on each order line</b> shows In stock or Not available, with a Make button that starts a manufacturing order.</li>
+        <li><b>Sales history</b> covers Katana orders from November 2021 (NZ) and February 2023 (AUS) onward, with sales by customer and by product.</li>
+      </ul>
+    </section>
+
+    <section id="rules">
+      <h2>Rules a CRM must respect</h2>
+      <ul class="plain">
+        <li><b>Two separate companies.</b> A customer trading with both NZ and AUS is two customer records, one in each entity, with separate Xero contacts.</li>
+        <li><b>Prices and stock come from the ERP.</b> Quote prices come from the customer's price list, then the default list, then the last price charged. Availability is calculated from the stock ledger.</li>
+        <li><b>Exports are zero-rated.</b> Goods shipped outside the entity's country carry 0% GST; freight still carries GST.</li>
+        <li><b>Credit hold</b> stops new sales orders but still allows quotes.</li>
+        <li><b>Cost and margin never leave the business.</b> They never appear on quotes, packing slips or work orders, and shouldn't appear in anything shared with customers.</li>
+        <li><b>Xero holds the money.</b> The ERP pushes invoices and credit notes and reads payment status back. It never takes payments itself.</li>
+      </ul>
+    </section>
+
+    <section id="crm">
+      <h2>Linking a CRM</h2>
+      <p class="lede">A proposed division of work, for the CRM specification to confirm or change.</p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Information</th><th>Owner</th><th>The other system</th></tr></thead>
+          <tbody>
+            <tr><td>Leads, prospects, opportunities and pipeline</td><td><span class="owner crm">CRM</span></td><td>The ERP doesn't need them until a quote is raised.</td></tr>
+            <tr><td>People (contacts, roles), calls, emails, meetings</td><td><span class="owner crm">CRM</span></td><td>The ERP keeps one primary contact for invoicing and a contact per delivery site.</td></tr>
+            <tr><td>Marketing lists and consent</td><td><span class="owner crm">CRM</span></td><td>None.</td></tr>
+            <tr><td>Customer trading account: billing address, terms, price list, credit limit and hold</td><td><span class="owner erp">ERP</span></td><td>CRM shows it read-only, or creates new accounts through the ERP.</td></tr>
+            <tr><td>Delivery sites</td><td><span class="owner erp">ERP</span></td><td>CRM may show them.</td></tr>
+            <tr><td>Quotes and sales orders (numbers, prices, stock, status)</td><td><span class="owner erp">ERP</span></td><td>CRM links the opportunity to the SO number and shows its status and value.</td></tr>
+            <tr><td>Invoices, payments, amount owing</td><td><span class="owner erp">ERP + Xero</span></td><td>CRM shows owing and overdue for the account manager.</td></tr>
+            <tr><td>Sales history by customer and product</td><td><span class="owner erp">ERP</span></td><td>CRM shows totals and the last order date.</td></tr>
+            <tr><td>Company name and main address</td><td><span class="owner both">Agree a master</span></td><td>Pick one system as the master to avoid two versions.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>How the two can connect</h3>
+      <ol class="steps">
+        <li><b>Today, no development:</b> Excel exports from Customers, Quotes, Sales orders, Invoicing and Insights → Sales by customer, imported into the CRM. Good for a pilot.</li>
+        <li><b>Recommended next step:</b> a small read-only ERP API (customers, quotes and orders, invoice status, sales by customer) that the CRM calls with its own key. It runs per entity and shares no passwords.</li>
+        <li><b>Later, if needed:</b> notifications from the ERP to the CRM when something happens: quote sent, quote accepted, order shipped, invoice paid. Optionally, a "create customer" call from the CRM when a prospect wins, which the ERP checks against its rules (unique name, entity).</li>
+      </ol>
+      <div class="rec">
+        <p><b>Matching records:</b> link CRM accounts to ERP customers by the ERP's customer ID plus entity (NZ or AUS), not by name. Names change and can differ between systems. Quotes and orders are best referenced by their SO number, which staff and customers already use.</p>
+      </div>
+    </section>
+
+    <section id="next">
+      <h2>Open items</h2>
+      <ul class="plain">
+        <li>AUS stocktake (week of 5 October) and AUS recipes from Katana's manufacturing ingredients export.</li>
+        <li>Standard costs for raw materials. Many are $0 from Katana, which understates manufacturing costs and margins.</li>
+        <li>Company details (address, GST/ABN, bank) on quote and order PDFs.</li>
+        <li>CRM link: confirm the division of work above, then build the read-only API.</li>
+        <li>Possible later: single sign-on, more than one contact per customer (if the CRM doesn't hold people), staging copy for testing.</li>
+      </ul>
+    </section>
+
+    <section id="decisions">
+      <h2>Decisions on record</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Topic</th><th>Decision</th></tr></thead>
+          <tbody>
+            <tr><td>Hosting</td><td>Vercel (app) and Supabase (database, Sydney); code on GitHub under the saveBOARD organisation. Free Vercel address.</td></tr>
+            <tr><td>Sign-in</td><td>Username and password managed in the app, so it isn't tied to one hosting provider.</td></tr>
+            <tr><td>Numbering</td><td>A quote becomes the sales order and keeps its number; SO, PO, MO, SA, STK and RET sequences per entity, continuing from Katana.</td></tr>
+            <tr><td>Stock</td><td>A ledger of movements. On hand is their sum; nothing is overwritten.</td></tr>
+            <tr><td>Batch tracking</td><td>Recorded on production output, goods receipts and shipment lines.</td></tr>
+            <tr><td>Xero</td><td>Live link on Xero's free Starter developer tier. Drafts are approved in Xero; payment status is read back daily.</td></tr>
+            <tr><td>Exports</td><td>Goods zero-rated, freight with GST (27 September 2026).</td></tr>
+            <tr><td>Invoicing up front</td><td>Allowed before shipping for cash, COD and custom orders (30 September 2026).</td></tr>
+            <tr><td>Switchover</td><td>Katana replaced on 30 September 2026. Katana stays read-only for reference until the subscription ends.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
