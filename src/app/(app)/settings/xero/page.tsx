@@ -3,7 +3,9 @@ import { desc, eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import { db, t } from "@/db";
 import { getEntityContext, requireAdmin } from "@/lib/dal";
-import { XERO_SETTINGS } from "@/lib/invoicing/xero";
+import { entityXeroSettings } from "@/lib/queries/xero-settings";
+import { xeroCodingOptions } from "@/lib/xero/coding";
+import { XeroCodingForm } from "./coding-form";
 import { xeroConfig } from "@/lib/xero/client";
 import { XeroButtons } from "./buttons";
 
@@ -35,7 +37,17 @@ export default async function XeroSettingsPage(props: PageProps<"/settings/xero"
   const error = str(sp.error);
   const tz = entity.id === "AUS" ? "Australia/Sydney" : "Pacific/Auckland";
   const when = (d: Date) => d.toLocaleString("en-NZ", { timeZone: tz, dateStyle: "medium", timeStyle: "short" });
-  const x = XERO_SETTINGS[entity.id];
+  const x = await entityXeroSettings(entity.id);
+  // The organisation's own accounts and tax rates, for Invoice coding (only when connected).
+  let coding: Awaited<ReturnType<typeof xeroCodingOptions>> | null = null;
+  let codingError: string | null = null;
+  if (conn) {
+    try {
+      coding = await xeroCodingOptions(entity.id);
+    } catch (e) {
+      codingError = e instanceof Error ? e.message : "Couldn't read the accounts from Xero.";
+    }
+  }
 
   return (
     <div className="mx-auto grid max-w-5xl gap-4">
@@ -72,6 +84,23 @@ export default async function XeroSettingsPage(props: PageProps<"/settings/xero"
           <li>The download-a-file option stays available on the Invoicing page as a fallback.</li>
         </ul>
       </section>
+
+      {conn && (
+        <section className="grid gap-3 rounded border border-line bg-surface p-5">
+          <div>
+            <h2 className="font-medium">Invoice coding</h2>
+            <p className="text-sm text-muted">
+              The sales account and tax rates used on {entity.id} invoices and credit notes in {conn.tenantName}, chosen from its own chart of accounts. Also
+              used in the import file.
+            </p>
+          </div>
+          {coding ? (
+            <XeroCodingForm accounts={coding.accounts} taxRates={coding.taxRates} current={x} />
+          ) : (
+            <p className="text-sm text-bad">{codingError}</p>
+          )}
+        </section>
+      )}
 
       {!conn && (
         <section className="grid gap-2 rounded border border-line bg-surface p-5 text-sm">

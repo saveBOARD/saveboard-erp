@@ -44,6 +44,10 @@ export const entities = pgTable("entities", {
   website: text("website"),
   taxNumber: text("tax_number"), // GST number / ABN
   quoteTerms: text("quote_terms"),
+  /** How invoices are coded in this entity's Xero organisation (chosen in Settings → Xero). Null = the defaults. */
+  xeroAccountCode: text("xero_account_code"), // sales account code, e.g. "200"
+  xeroTaxIncome: text("xero_tax_income"), // tax rate name for GST lines, e.g. "15% GST on Income"
+  xeroTaxZero: text("xero_tax_zero"), // tax rate name for zero-rated lines, e.g. "Zero Rated"
 });
 
 export const users = pgTable("users", {

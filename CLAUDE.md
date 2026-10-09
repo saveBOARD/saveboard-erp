@@ -68,6 +68,8 @@ server actions); the browser never queries tables directly.
   that number is linked, never duplicated. Daily Vercel cron `/api/cron/xero` (CRON_SECRET) reads back status and
   payments; a PAID invoice closes its order. Env: XERO_CLIENT_ID, XERO_CLIENT_SECRET, CRON_SECRET. The CSV import
   file stays as a fallback.
+  Invoice coding per entity (Settings → Xero, stored on `entities`): sales account NZ 100, AUS 200 by default
+  (Paul, 9/10/26), tax rates chosen from the org's own list.
 
 ## Users & UI
 - Sign-in with **username + password** (admin creates users; no self sign-up). Desktop-first; picking, goods

@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, eq, inArray, isNotNull, isNull, notInArray, or } from "drizzle-orm";
 import { db, t } from "@/db";
-import { XERO_SETTINGS } from "@/lib/invoicing/xero";
+import { entityXeroSettings } from "@/lib/queries/xero-settings";
 import { XeroError, xeroApi } from "./client";
 
 /**
@@ -22,7 +22,7 @@ const quote = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 
 /** Account code check and Xero's tax type codes for our tax rate names ("15% GST on Income" -> "OUTPUT2"). */
 export async function xeroSettingsCheck(entityId: string) {
-  const x = XERO_SETTINGS[entityId];
+  const x = await entityXeroSettings(entityId);
   const [{ TaxRates }, { Accounts }] = await Promise.all([
     xeroApi<{ TaxRates: { Name: string; TaxType: string; Status: string }[] }>(entityId, "GET", "/TaxRates"),
     xeroApi<{ Accounts: { Code: string; Name: string; Status: string }[] }>(entityId, "GET", `/Accounts?where=${encodeURIComponent(`Code=="${x.accountCode}"`)}`),
@@ -38,8 +38,8 @@ export async function xeroSettingsCheck(entityId: string) {
 
 async function taxCodes(entityId: string) {
   const s = await xeroSettingsCheck(entityId);
-  if (!s.account) throw new XeroError(`Account ${s.names.accountCode} doesn't exist in this Xero organisation.`);
-  if (!s.taxOnIncome || !s.taxZeroRated) throw new XeroError(`Tax rates "${s.names.taxOnIncome}" / "${s.names.taxZeroRated}" weren't both found in Xero.`);
+  if (!s.account) throw new XeroError(`Sales account ${s.names.accountCode} doesn't exist in this Xero organisation. An admin can choose the right account in Settings → Xero → Invoice coding, then use Send to Xero again.`);
+  if (!s.taxOnIncome || !s.taxZeroRated) throw new XeroError(`Tax rates "${s.names.taxOnIncome}" / "${s.names.taxZeroRated}" weren't both found in this Xero organisation. Choose them in Settings → Xero → Invoice coding.`);
   return { account: s.names.accountCode, gst: s.taxOnIncome, zero: s.taxZeroRated };
 }
 

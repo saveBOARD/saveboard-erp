@@ -7,6 +7,7 @@ import { db, t } from "@/db";
 import { assertEntityAccess, getEntityContext } from "@/lib/dal";
 import { dueDate, xeroInvoiceCsv } from "@/lib/invoicing/xero";
 import { creditNotes, invoiceOrders } from "@/lib/queries/invoicing";
+import { entityXeroSettings } from "@/lib/queries/xero-settings";
 import { getConnection, xeroApi } from "@/lib/xero/client";
 import { entityToday } from "@/lib/queries/stock-items";
 import { pushCreditNotes, pushInvoices, type PushResult } from "@/lib/xero/sync";
@@ -162,7 +163,7 @@ export async function invoiceOrderNow(orderId: string): Promise<CsvResult> {
       revalidatePath(`/sell/orders/${orderId}`);
       return r.failed.length ? { error: `Invoiced. ${pushMessage("invoices", r)} Retry from Sell → Invoicing → Invoiced.` } : { ok: true, message: pushMessage("invoices", r) };
     }
-    const csv = xeroInvoiceCsv(entity.id, await invoiceOrders(entity.id, ids));
+    const csv = xeroInvoiceCsv(entity.id, await invoiceOrders(entity.id, ids), await entityXeroSettings(entity.id));
     return { ok: true, csv, filename: filename(entity.id, today), message: "Invoiced. Import the downloaded file into Xero." };
   } catch (e) {
     return { error: errorText(e, "Couldn't invoice the order.") };
@@ -179,7 +180,7 @@ export async function invoiceAndExport(input: { orderIds: string[]; invoiceDate:
     const invoiceDate = isoDate.parse(input.invoiceDate);
     const err = await markInvoiced(entity.id, user.id, ids, invoiceDate, "xero_csv");
     if (err) return { error: err };
-    const csv = xeroInvoiceCsv(entity.id, await invoiceOrders(entity.id, ids));
+    const csv = xeroInvoiceCsv(entity.id, await invoiceOrders(entity.id, ids), await entityXeroSettings(entity.id));
     revalidate();
     return { ok: true, csv, filename: filename(entity.id, invoiceDate) };
   } catch (e) {
@@ -194,7 +195,7 @@ export async function exportAgain(orderIds: string[]): Promise<CsvResult> {
     const ids = Ids.parse(orderIds);
     const orders = await invoiceOrders(entity.id, ids);
     if (orders.length !== ids.length) return { error: "Only invoiced orders from this entity can be exported." };
-    return { ok: true, csv: xeroInvoiceCsv(entity.id, orders), filename: filename(entity.id, orders[0].invoicedOn) };
+    return { ok: true, csv: xeroInvoiceCsv(entity.id, orders, await entityXeroSettings(entity.id)), filename: filename(entity.id, orders[0].invoicedOn) };
   } catch (e) {
     return { error: e instanceof z.ZodError ? e.issues[0].message : e instanceof Error ? e.message : "Couldn't build the file." };
   }
@@ -208,7 +209,7 @@ export async function creditAndExport(input: { returnIds: string[]; creditDate: 
     const creditDate = isoDate.parse(input.creditDate);
     const err = await markCredited(entity.id, user.id, ids, creditDate, "xero_csv");
     if (err) return { error: err };
-    const csv = xeroInvoiceCsv(entity.id, await creditNotes(entity.id, ids));
+    const csv = xeroInvoiceCsv(entity.id, await creditNotes(entity.id, ids), await entityXeroSettings(entity.id));
     revalidate();
     revalidatePath("/sell/returns");
     return { ok: true, csv, filename: `xero-credit-notes-${entity.id}-${creditDate}.csv` };
@@ -224,7 +225,7 @@ export async function exportCreditsAgain(returnIds: string[]): Promise<CsvResult
     const ids = Ids.parse(returnIds);
     const notes = await creditNotes(entity.id, ids);
     if (notes.length !== ids.length) return { error: "Only credited returns from this entity can be exported." };
-    return { ok: true, csv: xeroInvoiceCsv(entity.id, notes), filename: `xero-credit-notes-${entity.id}-${notes[0].invoicedOn}.csv` };
+    return { ok: true, csv: xeroInvoiceCsv(entity.id, notes, await entityXeroSettings(entity.id)), filename: `xero-credit-notes-${entity.id}-${notes[0].invoicedOn}.csv` };
   } catch (e) {
     return { error: e instanceof z.ZodError ? e.issues[0].message : e instanceof Error ? e.message : "Couldn't build the file." };
   }

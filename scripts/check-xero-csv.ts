@@ -28,8 +28,8 @@ const lines = csv.replace(/^﻿/, "").trim().split("\r\n");
 assert.equal(lines.length, 3, "header + 2 lines (zero-qty note dropped)");
 assert.ok(lines[1].includes('"PO ""44"", site B"'));
 assert.ok(lines[1].includes("05/10/2026,04/11/2026"));
-assert.ok(lines[1].includes(",20,55.5,15,200,15% GST on Income,"));
-assert.ok(lines[2].includes(",1,120,,200,Zero Rated,"));
+assert.ok(lines[1].includes(",20,55.5,15,100,15% GST on Income,"));
+assert.ok(lines[2].includes(",1,120,,100,Zero Rated,"));
 assert.ok(lines[1].startsWith("Whangārei Builders,"));
 const credit = xeroInvoiceCsv("AUS", [
   {

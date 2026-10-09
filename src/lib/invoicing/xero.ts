@@ -5,9 +5,9 @@
 
 export type XeroSettings = { accountCode: string; taxOnIncome: string; taxZeroRated: string };
 
-/** Per entity: account 200 "Sales" and the default Xero tax rate names (from the workbooks' XeroExport sheets). */
+/** Defaults per entity (from the workbooks' XeroExport sheets); each entity can choose its own in Settings → Xero. */
 export const XERO_SETTINGS: Record<string, XeroSettings> = {
-  NZ: { accountCode: "200", taxOnIncome: "15% GST on Income", taxZeroRated: "Zero Rated" },
+  NZ: { accountCode: "100", taxOnIncome: "15% GST on Income", taxZeroRated: "Zero Rated" },
   AUS: { accountCode: "200", taxOnIncome: "GST on Income", taxZeroRated: "GST Free Income" },
 };
 
@@ -97,8 +97,8 @@ const cell = (v: string | number | null | undefined) => {
 const num = (n: number) => String(Math.round(n * 10000) / 10000);
 
 /** CSV text (with a BOM so Excel opens it as UTF-8) for a batch of orders from one entity. */
-export function xeroInvoiceCsv(entityId: string, orders: InvoiceOrder[]) {
-  const x = XERO_SETTINGS[entityId];
+export function xeroInvoiceCsv(entityId: string, orders: InvoiceOrder[], settings?: XeroSettings) {
+  const x = settings ?? XERO_SETTINGS[entityId];
   if (!x) throw new Error(`No Xero settings for ${entityId}`);
   const rows: string[] = [HEADER.join(",")];
   for (const o of orders) {

@@ -4,7 +4,7 @@ import { InvoicingList, type InvoiceRow, type InvoicingMode } from "@/components
 import { ListHeader } from "@/components/list-header";
 import { db, t } from "@/db";
 import { getEntityContext } from "@/lib/dal";
-import { XERO_SETTINGS } from "@/lib/invoicing/xero";
+import { entityXeroSettings } from "@/lib/queries/xero-settings";
 import { entityToday } from "@/lib/queries/stock-items";
 import { getConnection } from "@/lib/xero/client";
 
@@ -118,7 +118,7 @@ export default async function InvoicingPage(props: PageProps<"/sell/invoicing">)
     mode === "to_invoice" || mode === "invoiced" ? orderRows(entity.id, entity.currency, mode === "invoiced") : returnRows(entity.id, mode === "credited"),
     getConnection(entity.id),
   ]);
-  const x = XERO_SETTINGS[entity.id];
+  const x = await entityXeroSettings(entity.id);
 
   return (
     <>
