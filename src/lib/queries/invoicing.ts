@@ -1,6 +1,7 @@
 import "server-only";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { db, t } from "@/db";
+import { invoiceIdentity } from "@/lib/invoicing/numbers";
 import type { InvoiceOrder } from "@/lib/invoicing/xero";
 
 /** Credited returns (entity-checked) as Xero credit notes, numbered with the return number, in the order given. */
@@ -58,8 +59,8 @@ export async function invoiceOrders(entityId: string, ids: string[]): Promise<In
     .map((id) => byId.get(id))
     .filter((r): r is NonNullable<typeof r> => !!r && !!r.o.invoicedOn)
     .map(({ o, c }) => ({
-      number: o.number,
-      reference: o.customerReference || o.title,
+      number: invoiceIdentity(o).invoiceNumber,
+      reference: invoiceIdentity(o).reference,
       currency: o.currency,
       invoicedOn: o.invoicedOn!,
       invoiceDueOn: o.invoiceDueOn ?? o.invoicedOn!,

@@ -6,6 +6,8 @@ import { z } from "zod";
 import { db, t } from "@/db";
 import { assertEntityAccess, getEntityContext } from "@/lib/dal";
 import { dueDate, xeroInvoiceCsv } from "@/lib/invoicing/xero";
+import { ensureInvoiceNumbers } from "@/lib/invoicing/numbers";
+import { takeInvoiceNumber } from "@/lib/numbering";
 import { creditNotes, invoiceOrders } from "@/lib/queries/invoicing";
 import { entityXeroSettings } from "@/lib/queries/xero-settings";
 import { getConnection, xeroApi } from "@/lib/xero/client";
@@ -50,14 +52,15 @@ async function markInvoiced(entityId: string, userId: string, ids: string[], inv
     for (const r of rows) {
       const due = dueDate(invoiceDate, r.terms);
       const status = r.status === "shipped" ? ("invoiced" as const) : r.status; // unshipped: invoiced up front, status unchanged
-      await tx.update(t.salesOrders).set({ status, invoicedOn: invoiceDate, invoiceDueOn: due }).where(eq(t.salesOrders.id, r.id));
+      const invoiceNumber = await takeInvoiceNumber(tx, entityId); // NZ: INV-...; AUS: null (uses the order number)
+      await tx.update(t.salesOrders).set({ status, invoicedOn: invoiceDate, invoiceDueOn: due, invoiceNumber }).where(eq(t.salesOrders.id, r.id));
       await tx.insert(t.auditLog).values({
         entityId,
         userId,
         tableName: "sales_orders",
         recordId: r.id,
         action: "invoiced",
-        changes: { number: r.number, status: { from: r.status, to: status }, invoicedOn: invoiceDate, dueOn: due, via, upFront: r.status !== "shipped" },
+        changes: { number: r.number, invoiceNumber, status: { from: r.status, to: status }, invoicedOn: invoiceDate, dueOn: due, via, upFront: r.status !== "shipped" },
       });
     }
   });
@@ -163,7 +166,7 @@ export async function invoiceOrderNow(orderId: string): Promise<CsvResult> {
       revalidatePath(`/sell/orders/${orderId}`);
       return r.failed.length ? { error: `Invoiced. ${pushMessage("invoices", r)} Retry from Sell → Invoicing → Invoiced.` } : { ok: true, message: pushMessage("invoices", r) };
     }
-    const csv = xeroInvoiceCsv(entity.id, await invoiceOrders(entity.id, ids), await entityXeroSettings(entity.id));
+    const csv = xeroInvoiceCsv(entity.id, (await ensureInvoiceNumbers(entity.id, ids), await invoiceOrders(entity.id, ids)), await entityXeroSettings(entity.id));
     return { ok: true, csv, filename: filename(entity.id, today), message: "Invoiced. Import the downloaded file into Xero." };
   } catch (e) {
     return { error: errorText(e, "Couldn't invoice the order.") };
@@ -180,7 +183,7 @@ export async function invoiceAndExport(input: { orderIds: string[]; invoiceDate:
     const invoiceDate = isoDate.parse(input.invoiceDate);
     const err = await markInvoiced(entity.id, user.id, ids, invoiceDate, "xero_csv");
     if (err) return { error: err };
-    const csv = xeroInvoiceCsv(entity.id, await invoiceOrders(entity.id, ids), await entityXeroSettings(entity.id));
+    const csv = xeroInvoiceCsv(entity.id, (await ensureInvoiceNumbers(entity.id, ids), await invoiceOrders(entity.id, ids)), await entityXeroSettings(entity.id));
     revalidate();
     return { ok: true, csv, filename: filename(entity.id, invoiceDate) };
   } catch (e) {
@@ -193,7 +196,7 @@ export async function exportAgain(orderIds: string[]): Promise<CsvResult> {
   try {
     const { entity } = await context();
     const ids = Ids.parse(orderIds);
-    const orders = await invoiceOrders(entity.id, ids);
+    const orders = (await ensureInvoiceNumbers(entity.id, ids), await invoiceOrders(entity.id, ids));
     if (orders.length !== ids.length) return { error: "Only invoiced orders from this entity can be exported." };
     return { ok: true, csv: xeroInvoiceCsv(entity.id, orders, await entityXeroSettings(entity.id)), filename: filename(entity.id, orders[0].invoicedOn) };
   } catch (e) {
@@ -277,7 +280,7 @@ export async function undoInvoiced(orderId: string): Promise<CsvResult> {
     await db.transaction(async (tx) => {
       await tx
         .update(t.salesOrders)
-        .set({ status: o.status === "invoiced" ? "shipped" : o.status, invoicedOn: null, invoiceDueOn: null, xeroInvoiceId: null, xeroStatus: null, xeroAmountDue: null, xeroAmountPaid: null, xeroSyncedAt: null })
+        .set({ status: o.status === "invoiced" ? "shipped" : o.status, invoicedOn: null, invoiceDueOn: null, invoiceNumber: null, xeroInvoiceId: null, xeroStatus: null, xeroAmountDue: null, xeroAmountPaid: null, xeroSyncedAt: null })
         .where(eq(t.salesOrders.id, orderId));
       await tx.insert(t.auditLog).values({
         entityId: entity.id,

@@ -292,6 +292,9 @@ export const salesOrders = pgTable(
     /** Set when the order is marked Invoiced (invoice date and due date sent to Xero). */
     invoicedOn: date("invoiced_on"),
     invoiceDueOn: date("invoice_due_on"),
+    /** Invoice number in Xero. Entities with an "INV" number sequence (NZ: INV-1760…) number invoices separately;
+     *  otherwise the invoice uses the order number. Null until invoiced. */
+    invoiceNumber: text("invoice_number"),
     /** Xero invoice created through the live connection, and its status/payment as last read back. */
     xeroInvoiceId: text("xero_invoice_id"),
     xeroStatus: text("xero_status"), // DRAFT | SUBMITTED | AUTHORISED | PAID | VOIDED | DELETED
@@ -304,6 +307,7 @@ export const salesOrders = pgTable(
   },
   (t) => [
     uniqueIndex("sales_orders_entity_number").on(t.entityId, t.number),
+    uniqueIndex("sales_orders_entity_invoice_number").on(t.entityId, t.invoiceNumber),
     index("sales_orders_entity_status").on(t.entityId, t.status),
     index("sales_orders_customer").on(t.customerId),
   ],

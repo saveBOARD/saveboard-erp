@@ -6,6 +6,8 @@ import { getEntityContext, requireAdmin } from "@/lib/dal";
 import { entityXeroSettings } from "@/lib/queries/xero-settings";
 import { xeroCodingOptions } from "@/lib/xero/coding";
 import { XeroCodingForm } from "./coding-form";
+import { InvoiceNumberingForm } from "./numbering-form";
+import { draftsToRenumber, invoiceSequence } from "@/lib/invoicing/renumber";
 import { xeroConfig } from "@/lib/xero/client";
 import { XeroButtons } from "./buttons";
 
@@ -38,6 +40,7 @@ export default async function XeroSettingsPage(props: PageProps<"/settings/xero"
   const tz = entity.id === "AUS" ? "Australia/Sydney" : "Pacific/Auckland";
   const when = (d: Date) => d.toLocaleString("en-NZ", { timeZone: tz, dateStyle: "medium", timeStyle: "short" });
   const x = await entityXeroSettings(entity.id);
+  const [invSeq, drafts] = await Promise.all([invoiceSequence(entity.id), draftsToRenumber(entity.id)]);
   // The organisation's own accounts and tax rates, for Invoice coding (only when connected).
   let coding: Awaited<ReturnType<typeof xeroCodingOptions>> | null = null;
   let codingError: string | null = null;
@@ -99,6 +102,19 @@ export default async function XeroSettingsPage(props: PageProps<"/settings/xero"
           ) : (
             <p className="text-sm text-bad">{codingError}</p>
           )}
+        </section>
+      )}
+
+      {invSeq && (
+        <section className="grid gap-3 rounded border border-line bg-surface p-5">
+          <div>
+            <h2 className="font-medium">Invoice numbering</h2>
+            <p className="text-sm text-muted">
+              {entity.id} invoices have their own numbers ({invSeq.prefix}…), given in order as orders are invoiced. The sales order number goes in the
+              invoice&apos;s Reference in Xero.
+            </p>
+          </div>
+          <InvoiceNumberingForm prefix={invSeq.prefix} next={invSeq.next} drafts={conn ? drafts.map((d) => d.number) : []} />
         </section>
       )}
 

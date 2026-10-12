@@ -1,10 +1,11 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db, t } from "@/db";
 import { getEntityContext, requireAdmin } from "@/lib/dal";
 import { deleteConnection, accessToken } from "@/lib/xero/client";
+import { highestInvoiceNumber, invoiceSequence, renumberDrafts } from "@/lib/invoicing/renumber";
 import { xeroCodingOptions } from "@/lib/xero/coding";
 import { refreshFromXero, xeroSettingsCheck } from "@/lib/xero/sync";
 
@@ -85,5 +86,43 @@ export async function saveXeroCoding(input: { accountCode: string; taxIncome: st
     return { ok: `Saved. Invoices now use account ${input.accountCode}, "${input.taxIncome}" and "${input.taxZero}". Use Send to Xero on Sell → Invoicing → Invoiced for any not sent yet.` };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Couldn't save." };
+  }
+}
+
+/** Sets the next invoice number (e.g. 1760 → INV-1760). Can't go back onto a number already used. */
+export async function setNextInvoiceNumber(next: number): Promise<XeroActionResult> {
+  try {
+    const user = await requireAdmin();
+    const { entity } = await getEntityContext();
+    const seq = await invoiceSequence(entity.id);
+    if (!seq) return { error: `${entity.id} invoices use the sales order number.` };
+    if (!Number.isInteger(next) || next < 1) return { error: "Enter a whole number, e.g. 1760." };
+    const highest = await highestInvoiceNumber(entity.id, seq.prefix);
+    if (next <= highest) return { error: `${seq.prefix}${highest} has already been used; the next number must be ${highest + 1} or more.` };
+    await db
+      .update(t.numberSequences)
+      .set({ nextValue: next })
+      .where(and(eq(t.numberSequences.entityId, entity.id), eq(t.numberSequences.kind, "INV")));
+    await db.insert(t.auditLog).values({ entityId: entity.id, userId: user.id, tableName: "number_sequences", recordId: `${entity.id}/INV`, action: "set_next", changes: { from: seq.next, to: next } });
+    revalidatePath("/settings/xero");
+    return { ok: `The next invoice will be ${seq.prefix}${next}.` };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Couldn't save." };
+  }
+}
+
+/** Gives Xero drafts still numbered with the SO number the next invoice numbers (changes them in Xero). */
+export async function renumberXeroDrafts(): Promise<XeroActionResult> {
+  try {
+    await requireAdmin();
+    const { entity } = await getEntityContext();
+    const r = await renumberDrafts(entity.id);
+    revalidatePath("/settings/xero");
+    revalidatePath("/sell/invoicing");
+    const parts = [r.done.length ? `Renumbered: ${r.done.join(", ")}.` : "Nothing to renumber.", r.skipped.length ? `Left as they were (no longer drafts): ${r.skipped.join(", ")}.` : ""];
+    return { ok: parts.filter(Boolean).join(" ") };
+  } catch (e) {
+    revalidatePath("/settings/xero");
+    return { error: `${e instanceof Error ? e.message : "Couldn't renumber."} Any invoices renumbered before this point keep their new numbers.` };
   }
 }

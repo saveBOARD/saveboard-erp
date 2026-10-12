@@ -8,7 +8,7 @@ import { assertEntityAccess, getEntityContext } from "@/lib/dal";
 import { dayStamp } from "@/lib/dates";
 import { dueDate } from "@/lib/invoicing/xero";
 import { entityToday } from "@/lib/queries/stock-items";
-import { takeNumber } from "@/lib/numbering";
+import { takeInvoiceNumber, takeNumber } from "@/lib/numbering";
 import { lineAmounts, orderTotals } from "@/lib/orders/calc";
 import { shippedByLine } from "@/lib/orders/shipped";
 
@@ -305,7 +305,8 @@ export async function setOrderStatus(id: string, to: OrderStatus): Promise<Actio
       dates = { invoicedOn: today, invoiceDueOn: dueDate(today, c?.terms) };
     }
     await db.transaction(async (tx) => {
-      await tx.update(t.salesOrders).set({ status: to, ...dates }).where(eq(t.salesOrders.id, id));
+      const invoiceNumber = to === "invoiced" ? await takeInvoiceNumber(tx, entity.id) : null;
+      await tx.update(t.salesOrders).set({ status: to, ...dates, ...(invoiceNumber ? { invoiceNumber } : {}) }).where(eq(t.salesOrders.id, id));
       await tx.insert(t.auditLog).values({
         entityId: entity.id,
         userId: user.id,

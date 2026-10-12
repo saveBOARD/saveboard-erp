@@ -53,6 +53,9 @@ server actions); the browser never queries tables directly.
 - **Cost and margin never appear** on picking slips, packing slips or work orders.
 - **Exports are zero-rated**: goods on export orders carry 0% GST; only freight is charged GST (Paul, 27/9/26).
 - One sales order = one invoice (no split/progress invoicing). Invoicing is manual, not automatic on Shipped.
+- Invoice numbers: NZ invoices have their own sequence INV-1760… (`invoice_number`, "INV" number sequence, set when
+  invoiced; SO number goes in the Xero Reference) — Paul 12/10/26. AUS invoices use the SO number (no INV sequence).
+  Settings → Xero → Invoice numbering sets the next number and can renumber Xero drafts sent with SO numbers.
 - An order can be invoiced UP FRONT, before it's picked/made/shipped (cash, COD, custom work paid before production;
   Paul 30/9/26): "Invoice now" on an open/picked order sets invoiced_on (and sends it to Xero) without changing its
   status; it can't then be edited or cancelled until the invoice is undone; when fully shipped it goes straight to

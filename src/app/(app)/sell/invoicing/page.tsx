@@ -32,6 +32,7 @@ async function orderRows(entityId: string, entityCurrency: string, invoiced: boo
       subtotal: o.subtotal,
       currency: o.currency,
       xeroInvoiceId: o.xeroInvoiceId,
+      invoiceNumber: o.invoiceNumber,
       xeroStatus: o.xeroStatus,
       xeroAmountDue: o.xeroAmountDue,
       zeroRated: sql<boolean>`not exists (select 1 from order_lines l where l.order_id = ${o.id} and l.tax_rate > 0 and l.product_id is not null)`,
@@ -62,6 +63,7 @@ async function orderRows(entityId: string, entityCurrency: string, invoiced: boo
     currency: r.currency,
     export: r.zeroRated && r.currency !== entityCurrency,
     inXero: !!r.xeroInvoiceId,
+    invoiceNumber: r.invoiceNumber,
     xeroStatus: r.xeroStatus,
     amountDue: r.xeroAmountDue === null ? null : Number(r.xeroAmountDue),
   }));

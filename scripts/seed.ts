@@ -6,7 +6,7 @@ import "./env";
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { createDb } from "../src/db/client";
-import { entities, priceLists, userEntities, users } from "../src/db/schema";
+import { entities, numberSequences, priceLists, userEntities, users } from "../src/db/schema";
 
 const ENTITIES = [
   {
@@ -37,6 +37,8 @@ async function main() {
     .insert(priceLists)
     .values(ENTITIES.map((e) => ({ entityId: e.id, name: "Standard", isDefault: true })))
     .onConflictDoNothing();
+  // NZ numbers its invoices separately (INV-1760 on, Paul 12/10/26); AUS invoices use the order number.
+  await db.insert(numberSequences).values({ entityId: "NZ", kind: "INV", prefix: "INV-", nextValue: 1760 }).onConflictDoNothing();
 
   const username = (process.env.ADMIN_USERNAME ?? "paul").toLowerCase();
   const password = process.env.ADMIN_PASSWORD;

@@ -1,6 +1,7 @@
 import "server-only";
 import { and, asc, eq, inArray, isNotNull, isNull, notInArray, or } from "drizzle-orm";
 import { db, t } from "@/db";
+import { ensureInvoiceNumbers, invoiceIdentity } from "@/lib/invoicing/numbers";
 import { entityXeroSettings } from "@/lib/queries/xero-settings";
 import { XeroError, xeroApi } from "./client";
 
@@ -88,10 +89,15 @@ export async function pushInvoices(entityId: string, orderIds: string[], userId?
     .select()
     .from(t.salesOrders)
     .where(and(eq(t.salesOrders.entityId, entityId), inArray(t.salesOrders.id, orderIds), isNotNull(t.salesOrders.invoicedOn)));
+  await ensureInvoiceNumbers(entityId, orders.filter((o) => !o.xeroInvoiceId).map((o) => o.id));
+  const numbers = new Map(
+    (await db.select({ id: t.salesOrders.id, invoiceNumber: t.salesOrders.invoiceNumber }).from(t.salesOrders).where(inArray(t.salesOrders.id, orders.map((o) => o.id)))).map((r) => [r.id, r.invoiceNumber]),
+  );
   for (const o of orders) {
     if (o.xeroInvoiceId) continue;
+    const ident = invoiceIdentity({ ...o, invoiceNumber: numbers.get(o.id) ?? o.invoiceNumber });
     try {
-      const existing = await xeroApi<{ Invoices: XInvoice[] }>(entityId, "GET", `/Invoices?InvoiceNumbers=${encodeURIComponent(o.number)}&Statuses=DRAFT,SUBMITTED,AUTHORISED,PAID`);
+      const existing = await xeroApi<{ Invoices: XInvoice[] }>(entityId, "GET", `/Invoices?InvoiceNumbers=${encodeURIComponent(ident.invoiceNumber)}&Statuses=DRAFT,SUBMITTED,AUTHORISED,PAID`);
       let inv = existing.Invoices[0];
       if (inv) result.linked++;
       else {
@@ -106,8 +112,8 @@ export async function pushInvoices(entityId: string, orderIds: string[], userId?
               {
                 Type: "ACCREC",
                 Contact: { ContactID: contactId },
-                InvoiceNumber: o.number,
-                Reference: o.customerReference || o.title || undefined,
+                InvoiceNumber: ident.invoiceNumber,
+                Reference: ident.reference ?? undefined,
                 Date: o.invoicedOn,
                 DueDate: o.invoiceDueOn ?? o.invoicedOn,
                 CurrencyCode: o.currency,
@@ -134,7 +140,7 @@ export async function pushInvoices(entityId: string, orderIds: string[], userId?
         .update(t.salesOrders)
         .set({ xeroInvoiceId: inv.InvoiceID, xeroStatus: inv.Status, xeroAmountDue: String(inv.AmountDue ?? 0), xeroAmountPaid: String(inv.AmountPaid ?? 0), xeroSyncedAt: new Date() })
         .where(eq(t.salesOrders.id, o.id));
-      await log(entityId, "invoice", o.id, o.number, true, existing.Invoices[0] ? `Linked to the invoice already in Xero (${inv.Status})` : "Draft invoice created", userId);
+      await log(entityId, "invoice", o.id, o.number, true, existing.Invoices[0] ? `Linked to invoice ${ident.invoiceNumber} already in Xero (${inv.Status})` : `Draft invoice ${ident.invoiceNumber} created`, userId);
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e);
       result.failed.push({ number: o.number, error });

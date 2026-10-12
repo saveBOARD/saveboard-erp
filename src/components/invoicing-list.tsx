@@ -33,6 +33,8 @@ export type InvoiceRow = {
   id: string;
   href: string;
   number: string;
+  /** Separate invoice number (e.g. INV-1760) when the entity has one. */
+  invoiceNumber?: string | null;
   title: string | null; // order title, or the sales order a return is against
   customer: string;
   reference: string | null;
@@ -214,6 +216,7 @@ export function InvoicingList({
                     {r.number}
                     {r.title && ` / ${r.title}`}
                   </Link>
+                  {r.invoiceNumber && <span className="ml-2 font-mono text-xs text-muted">{r.invoiceNumber}</span>}
                   {r.export && <span className="ml-2 rounded bg-pending px-1.5 py-0.5 text-xs">Export</span>}
                 </td>
                 <td className="border-b border-line px-3 py-2">{r.customer}</td>

@@ -98,6 +98,11 @@ export function OrderView({
               Invoiced {o.invoicedOn}
             </span>
           )}
+          {kind === "order" && o.invoiceNumber && (
+            <span className="rounded border border-line px-3 py-1.5 font-mono text-sm" title="Invoice number in Xero">
+              {o.invoiceNumber}
+            </span>
+          )}
           <span className={clsx("rounded px-4 py-1.5 text-sm font-medium", status.className)}>{status.label}</span>
         </div>
         {actions}
