@@ -119,9 +119,11 @@ export function OrderActions({ id, kind, status, quoteStatus, canReturn, invoice
                 {!invoicedOn && (
                   <Btn disabled={pending} onClick={() => run(() => setOrderStatus(id, "cancelled"), "Cancel this sales order? Its stock is released.")}>Cancel order</Btn>
                 )}
+                {/* Blue as a reminder to invoice; gone once invoiced. */}
                 {!invoicedOn && (
                   <Btn
                     disabled={pending}
+                    primary
                     onClick={() =>
                       runInvoice(
                         "Invoice this order now, before it ships? (e.g. cash / COD, or payment up front for a custom order.) It then can't be edited or cancelled unless the invoice is undone.",
